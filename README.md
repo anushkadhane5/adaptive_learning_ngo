@@ -29,19 +29,27 @@ These challenges result in uneven learning outcomes and reduced student confiden
 ## ⚙️ How It Works (Solution Flow)
 
 ```mermaid
-graph TD
-    A[Student Enters Profile Data] --> B{Matching Algorithm}
-
-    B -- No Match Found --> C[AI Chatbot Support]
-
-    B -- Match Found --> D[Peer Mentor–Mentee Pairing]
-    D --> E[Learning Session Begins]
-
-    subgraph Future_Features
-        E --> F[WhatsApp Reminder Sent]
-        E --> G[Video Call Link Generated]
-    end
+graph TD;
+    A[Student Enters Data] --> B{Matching Algorithm};
+    B --> C[Find Peer Match];
+    C --> D[Schedule Session];
+    D -.->|Future Feature| E[WhatsApp Reminder Sent];
+    D -.->|Future Feature| F[Video Call Link Generated];
+    B -.->|No Match Found| G[AI Chatbot Support];
 ```
+## 📸 App Screenshots
+
+### 🎯 1. Smart Match Found
+Our algorithm intelligently pairs a Mentor with a Mentee based on complementary subject strengths and compatibility scores.
+![Smart Match](match_found.jpg)
+
+### 💬 2. Interactive Learning Session
+The session interface features a prototype chat, resource sharing, and future-ready "Ask AI" and "Video Call" integrations.
+![Learning Session](session_ui.jpg)
+
+### 🏆 3. Leaderboard & Gamification
+To keep students motivated, we use a reward system where mentors earn points, badges, and rank on a real-time leaderboard.
+![Leaderboard](leaderboard.jpg)
 
 ## 🎮 Core Features
 - Role-based onboarding (**Student / Teacher**)
@@ -66,12 +74,31 @@ graph TD
 
 ---
 
-## 🚀 Running the Project Locally
+## 💻 How to Run Locally
+
+Follow these steps to set up the **Sahay** prototype on your computer:
+
+1. **Clone the repository:**
+
+```bash
+git clone https://github.com/GitBeat16/adaptive_learning_ngo/tree/main
+```
+
+2. **Install dependencies:**
+
 ```bash
 pip install streamlit
-streamlit run app.py
+```
 
-##🌐 Live Demo
+3. **Run the application:**
+
+```bash
+streamlit run app.py
+```
+
+4. **Access the App:** Open your browser and go to `http://localhost:8501`.
+
+#🌐 Live Demo
 
 🔗 Streamlit Community Cloud Deployment
 https://adaptivelearningngo-ctc-thesemicolon.streamlit.app/
@@ -88,7 +115,6 @@ Support for vocational and skill-based learning
 ##👥 Team Details
 
 Team Name: The Semicolon
-
 Project Name: Sahay – Peer Learning Matching System
 
 👩‍💻 Team Leader
@@ -104,5 +130,6 @@ Anushka Dhane
 ##🏆 Hackathon Note
 This project is a functional prototype developed during a hackathon.
 The focus is on demonstrating logic, user flow, and scalability, with advanced features planned for future development.
+
 
 
