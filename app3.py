@@ -1,7 +1,3 @@
-import streamlit as st
-from ratings import show_rating_ui
-from matching import find_matches
-import time
 
 # =========================================================
 # PAGE CONFIG
@@ -16,14 +12,31 @@ st.set_page_config(
 # =========================================================
 st.markdown("""
 <style>
+/* App background */
 .stApp {
     background: linear-gradient(135deg, #e8f5ff, #e8fff3);
+}
+
+/* Default text color */
+h1, h2, h3, h4, h5, h6, p, span, div, label {
     color: black;
 }
 
-/* Headings */
-h1, h2, h3, h4, h5, h6, p, label, span, div {
-    color: black !important;
+/* ---------------- WHITE LABELS (SPECIFIC FIELDS) ---------------- */
+label[data-testid="stWidgetLabel"]:has(+ div input[aria-label="Full Name"]) {
+    color: white !important;
+}
+
+label[data-testid="stWidgetLabel"]:has(+ div div[aria-label="Grade"]) {
+    color: white !important;
+}
+
+label[data-testid="stWidgetLabel"]:has(+ div div[aria-label="Time Slot"]) {
+    color: white !important;
+}
+
+label[data-testid="stWidgetLabel"]:has(+ div div[aria-label="Subjects You Teach"]) {
+    color: white !important;
 }
 
 /* Buttons */
@@ -42,7 +55,7 @@ h1, h2, h3, h4, h5, h6, p, label, span, div {
     box-shadow: 0 6px 18px rgba(0,0,0,0.15);
 }
 
-/* Card Layout */
+/* Card layout */
 .card {
     background: white;
     padding: 22px;
@@ -58,7 +71,7 @@ h1, h2, h3, h4, h5, h6, p, label, span, div {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Metric Cards */
+/* Metric cards */
 [data-testid="stMetric"] {
     background: #f4fbff;
     padding: 12px;
@@ -212,109 +225,3 @@ if st.session_state.stage == 1:
             st.session_state.profile = profile
             st.session_state.stage = 2
             st.rerun()
-
-# =========================================================
-# STAGE 2: MATCH RESULTS
-# =========================================================
-if st.session_state.stage == 2:
-    st.markdown("""
-    <div class="card">
-        <h2>Step 2: Match Results</h2>
-        <p>Finding the best mentor for you</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.spinner("Analyzing profiles..."):
-        time.sleep(1)
-        best_mentor, score, reasons = find_best_mentor(
-            st.session_state.profile,
-            st.session_state.mentors
-        )
-
-    if best_mentor:
-        st.success(f"Match Found. Score: {score}")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Mentor", best_mentor["name"])
-        with col2:
-            st.metric("Compatibility", score)
-
-        st.info("Reasons: " + ", ".join(reasons))
-
-        if st.button("Start Learning Session", type="primary"):
-            st.session_state.current_match = {
-                "Mentor": best_mentor["name"],
-                "Mentee": st.session_state.profile["name"],
-                "Score": score,
-                "Mentor_Role": best_mentor["role"]
-            }
-            st.session_state.stage = 3
-            st.rerun()
-    else:
-        st.warning("No suitable match found")
-        if st.button("Back"):
-            st.session_state.stage = 1
-            st.rerun()
-
-# =========================================================
-# STAGE 3: LEARNING SESSION
-# =========================================================
-if st.session_state.stage == 3:
-    st.markdown("""
-    <div class="card">
-        <h2>Learning Session</h2>
-        <p>Ask questions, share resources, and collaborate</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    message = st.text_area("Your Message")
-    if st.button("Send Message"):
-        st.success("Message sent")
-
-    files = st.file_uploader("Upload Resources", accept_multiple_files=True)
-    if files:
-        for f in files:
-            st.success(f"Uploaded: {f.name}")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("AI Assistance"):
-            st.info("Break problems into smaller steps")
-    with col2:
-        if st.button("Share Progress"):
-            st.success("Progress shared")
-    with col3:
-        if st.button("End Session"):
-            st.session_state.stage = 4
-            st.rerun()
-
-# =========================================================
-# STAGE 4: RATING
-# =========================================================
-if st.session_state.stage == 4:
-    st.markdown("""
-    <div class="card">
-        <h2>Rate the Session</h2>
-        <p>Your feedback helps improve learning quality</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    show_rating_ui()
-
-    if st.button("Submit Rating"):
-        mentor = st.session_state.current_match["Mentor"]
-        st.session_state.leaderboard[mentor] = (
-            st.session_state.leaderboard.get(mentor, 0) + st.session_state.rating * 20
-        )
-        st.success("Thank you for your feedback")
-
-    st.subheader("Leaderboard")
-    for i, (name, score) in enumerate(
-        sorted(st.session_state.leaderboard.items(), key=lambda x: x[1], reverse=True), 1
-    ):
-        st.write(f"{i}. {name} - {score} points")
-
-    if st.button("New Session"):
-        st.session_state.clear()
-        st.rerun()
