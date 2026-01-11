@@ -57,14 +57,16 @@ if not st.session_state.logged_in:
     auth_page()
     st.stop()
 
+
 # =========================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR (ONLY AFTER LOGIN)
 # =========================================================
 st.sidebar.title("Navigation")
 
 page = st.sidebar.radio(
     "Go to",
-    ["Dashboard", "Matchmaking", "Learning Materials", "Practice", "Admin"]
+    ["Dashboard", "Matchmaking", "Learning Materials", "Practice", "Admin"],
+    key="nav_radio"
 )
 
 st.sidebar.divider()
