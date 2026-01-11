@@ -67,6 +67,19 @@ page = st.sidebar.radio(
     ["Dashboard", "Matchmaking", "Learning Materials", "Practice", "Admin"]
 )
 
+st.sidebar.divider()
+
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.session_state.user_id = None
+    st.session_state.user_name = ""
+    st.session_state.page = "Dashboard"
+    st.session_state.stage = 1
+    st.session_state.profile = {}
+    st.session_state.current_match = None
+    st.rerun()
+
+
 # =========================================================
 # DATABASE LOADERS
 # =========================================================
@@ -289,3 +302,19 @@ elif page == "Admin":
         st.warning("Unauthorized access")
     else:
         admin_page()
+
+# =========================================================
+# LOGOUT BUTTON
+# =========================================================
+st.sidebar.divider()
+
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.session_state.user_id = None
+    st.session_state.user_name = ""
+    st.session_state.page = "Dashboard"
+    st.session_state.stage = 1
+    st.session_state.profile = {}
+    st.session_state.current_match = None
+    st.rerun()
+
