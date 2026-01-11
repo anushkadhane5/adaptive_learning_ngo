@@ -17,7 +17,7 @@ except Exception as e:
     st.error(f"❌ Supabase Connection Failed. Check Secrets. Error: {e}")
     st.stop()
 
-# 2. SETUP AI (Using Stable Model)
+# 2. SETUP AI
 ai_available = False
 if "GOOGLE_API_KEY" in st.secrets:
     try:
@@ -259,23 +259,22 @@ elif st.session_state.stage == 3:
         
         st.divider()
         
-        # AI Helper Button
+        # AI Helper
         if st.button("🤖 Ask AI Hint"):
             if not ai_available:
                 st.error("AI Key missing.")
             else:
                 try:
-                    # 1. Get Context
+                    # Context: Last 3 messages
                     context_msgs = [m['message'] for m in msgs[-3:] if m['message']]
                     context = " ".join(context_msgs) if context_msgs else "No context yet."
                     
-                    # 2. USE THE NEW MODEL NAME (Now supported with the library update)
-                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    # 🔴 UPDATED TO YOUR AVAILABLE MODEL 🔴
+                    model = genai.GenerativeModel("gemini-2.0-flash")
                     
-                    # 3. Generate
                     resp = model.generate_content(f"Two students are discussing: '{context}'. Give a short, helpful hint.")
                     
-                    # 4. Save to Database
+                    # Inject AI response into chat
                     supabase.table("messages").insert({
                         "match_id": st.session_state.match_id,
                         "sender": "AI Bot",
@@ -283,17 +282,8 @@ elif st.session_state.stage == 3:
                         "file_url": None
                     }).execute()
                     st.rerun()
-                    
                 except Exception as e:
                     st.error(f"AI Error: {e}")
-                    # Debugging Helper: Print available models if it fails again
-                    try:
-                        st.write("Available models:")
-                        for m in genai.list_models():
-                            if 'generateContent' in m.supported_generation_methods:
-                                st.code(m.name)
-                    except:
-                        pass
 
         if st.button("End Session"):
             st.session_state.stage = 1
