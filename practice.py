@@ -3,6 +3,11 @@ from practice_data import PRACTICE_DATA
 from streak import update_streak
 
 def practice_page():
+
+    if "user_profile" not in st.session_state:
+        st.warning("Please log in to access practice.")
+        return
+
     profile = st.session_state.user_profile
 
     st.subheader("Practice Questions")
@@ -33,7 +38,7 @@ def practice_page():
     questions = PRACTICE_DATA[user_class][subject][topic]
 
     st.divider()
-    st.markdown("### 📝 Answer the following:")
+    st.markdown("### Answer the following:")
 
     user_answers = []
     for i, q in enumerate(questions):
@@ -51,9 +56,8 @@ def practice_page():
             if user_answers[i] == q["answer"]:
                 score += 1
 
-        st.success(f"✅ Your Score: {score} / {len(questions)}")
+        st.success(f"Your Score: {score} / {len(questions)}")
 
-        # Update streak ONCE per day
         update_streak()
 
         if score == len(questions):
