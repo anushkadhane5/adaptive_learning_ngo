@@ -1,4 +1,4 @@
-mport streamlit as st
+import streamlit as st
 from practice_data import PRACTICE_DATA
 from streak import update_streak
 
