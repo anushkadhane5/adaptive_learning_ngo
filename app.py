@@ -17,34 +17,35 @@ st.set_page_config(
 # --- CUSTOM CSS FOR "GREAT UI" ---
 st.markdown("""
 <style>
-    /* Main Background & Fonts */
+    /* 1. Main Background & Text Color */
     .stApp {
         background-color: #f8f9fa;
+        color: #000000; /* Force black text */
+    }
+    
+    /* 2. Fix Input Labels (They turn white in dark mode) */
+    .stMarkdown, .stSelectbox label, .stTextInput label {
+        color: #31333F !important;
+    }
+
+    /* 3. Header Styling */
+    h1, h2, h3 {
+        color: #2c3e50 !important;
         font-family: 'Inter', sans-serif;
     }
     
-    /* Header Styling */
-    h1 {
-        color: #2c3e50;
-        font-weight: 700;
-        text-align: center;
-        margin-bottom: 30px;
-    }
-    
-    /* Chat Bubble - User (Me) */
+    /* 4. Chat Bubbles */
     .chat-bubble-me {
         background-color: #dcf8c6;
         color: #000;
         padding: 10px 15px;
         border-radius: 15px 15px 0 15px;
-        margin: 5px 0;
+        margin: 5px 0 5px auto; /* Push to right */
         max-width: 70%;
-        float: right;
-        clear: both;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        display: block;
     }
     
-    /* Chat Bubble - Partner */
     .chat-bubble-partner {
         background-color: #ffffff;
         color: #000;
@@ -52,12 +53,10 @@ st.markdown("""
         border-radius: 15px 15px 15px 0;
         margin: 5px 0;
         max-width: 70%;
-        float: left;
-        clear: both;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        display: block;
     }
     
-    /* Chat Bubble - AI */
     .chat-bubble-ai {
         background-color: #e0e7ff;
         border: 1px solid #6366f1;
@@ -66,14 +65,8 @@ st.markdown("""
         border-radius: 15px;
         margin: 5px 0;
         max-width: 80%;
-        float: left;
-        clear: both;
         font-style: italic;
-    }
-
-    /* Container Spacing */
-    .block-container {
-        padding-top: 2rem;
+        display: block;
     }
 </style>
 """, unsafe_allow_html=True)
