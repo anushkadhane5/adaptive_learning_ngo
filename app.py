@@ -6,7 +6,7 @@ import time
 # =========================================================
 # CONFIGURATION
 # =========================================================
-st.set_page_config(page_title="Sahay: Advanced Match", layout="wide")
+st.set_page_config(page_title="Sahay: Precision Match", layout="wide")
 
 # 1. SETUP SUPABASE
 try:
@@ -26,61 +26,61 @@ if "GOOGLE_API_KEY" in st.secrets:
     except: pass
 
 # =========================================================
-# 🧠 THE ADVANCED MATCHING ALGORITHM
+# 🧠 ROBUST MATCHING ALGORITHM (FIXED)
 # =========================================================
 def calculate_match_score(me, candidate):
     score = 0
-    log = [] # To store reasons for the score
+    log = [] 
 
-    # 1. LANGUAGE CHECK (Critical) - Must share at least one language
-    my_langs = set(me.get('languages', '').split(','))
-    their_langs = set(candidate.get('languages', '').split(','))
+    # --- FIX: SAFE STRING HANDLING ---
+    # Retrieve values and ensure they are strings (handle None/Null from DB)
+    my_lang_str = me.get('languages') or ""
+    cand_lang_str = candidate.get('languages') or ""
     
+    my_subj_str = me.get('subjects') or ""
+    cand_subj_str = candidate.get('subjects') or ""
+    
+    my_topic_str = me.get('specific_topics') or ""
+    cand_topic_str = candidate.get('specific_topics') or ""
+    # ---------------------------------
+
+    # 1. LANGUAGE CHECK
+    my_langs = set(x.strip() for x in my_lang_str.split(',') if x.strip())
+    their_langs = set(x.strip() for x in cand_lang_str.split(',') if x.strip())
+    
+    # If no common language, score is 0
     if not my_langs.intersection(their_langs):
-        return 0, ["No common language"] # Instant Fail
-    score += 20 # Base points for communicating
+        return 0, ["No common language"]
+    score += 20 
 
     # 2. SUBJECT MATCH
-    my_subs = set(me.get('subjects', '').split(', '))
-    their_subs = set(candidate.get('subjects', '').split(', '))
-    common_subs = my_subs.intersection(their_subs)
+    my_subs = set(x.strip() for x in my_subj_str.split(',') if x.strip())
+    their_subs = set(x.strip() for x in cand_subj_str.split(',') if x.strip())
     
+    common_subs = my_subs.intersection(their_subs)
     if common_subs:
         score += 40
         log.append(f"Matches on: {', '.join(common_subs)}")
     else:
-        return 0, ["No common subject"] # Instant Fail if no subject match
+        return 0, ["No common subject"]
 
     # 3. GRADE LOGIC
-    # Convert "Grade 10" -> 10
     try:
         my_grade = int(me['grade'].split(" ")[1])
         their_grade = int(candidate['grade'].split(" ")[1])
         grade_diff = their_grade - my_grade
 
         if me['role'] == "Student":
-            # Student wants a Senior Mentor
-            if grade_diff > 0: 
-                score += 30 # Senior is best
-                log.append("Mentor is senior (+30)")
-            elif grade_diff == 0: 
-                score += 15 # Peer is okay
-            else:
-                score -= 50 # Junior mentor is bad
+            if grade_diff > 0: score += 30 # Senior is best
+            elif grade_diff == 0: score += 15 # Peer is okay
         else:
-            # I am a Teacher looking for a Junior Student
-            if grade_diff < 0:
-                score += 30
+            if grade_diff < 0: score += 30 # Teacher wants junior
     except:
-        pass # Ignore if grade format is weird
+        pass 
 
-    # 4. SPECIFIC TOPIC BONUS
-    my_topics = me.get('specific_topics', '').lower()
-    their_topics = candidate.get('specific_topics', '').lower()
-    
-    # Simple check if topic words appear in other's profile
-    if my_topics and their_topics:
-        if my_topics in their_topics or their_topics in my_topics:
+    # 4. TOPIC BONUS
+    if my_topic_str and cand_topic_str:
+        if my_topic_str.lower() in cand_topic_str.lower() or cand_topic_str.lower() in my_topic_str.lower():
             score += 25
             log.append("Exact topic match! (+25)")
 
@@ -89,7 +89,7 @@ def calculate_match_score(me, candidate):
 def find_best_match(my_profile):
     opposite_role = "Teacher" if my_profile['role'] == "Student" else "Student"
     
-    # 1. Fetch potential candidates (Waitlist + Opposite Role + Same Time)
+    # Fetch candidates
     response = supabase.table("profiles").select("*")\
         .eq("role", opposite_role)\
         .eq("time_slot", my_profile['time_slot'])\
@@ -99,7 +99,6 @@ def find_best_match(my_profile):
     candidates = response.data
     if not candidates: return None
 
-    # 2. Run Algorithm on everyone
     best_candidate = None
     highest_score = 0
     
@@ -115,7 +114,7 @@ def find_best_match(my_profile):
 # DATABASE HELPERS
 # =========================================================
 def save_profile(data):
-    # Convert lists to strings for DB
+    # Join lists to strings
     data['subjects'] = ", ".join(data['subjects'])
     data['languages'] = ",".join(data['languages'])
     try:
@@ -126,17 +125,15 @@ def save_profile(data):
         return False
 
 def create_match_record(p1, p2):
-    # Sort names to ensure ID is always "A-B" not "B-A"
     names = sorted([p1, p2])
     match_id = f"{names[0]}-{names[1]}"
-    
     try:
         check = supabase.table("matches").select("*").eq("match_id", match_id).execute()
         if not check.data:
             supabase.table("matches").insert({
                 "match_id": match_id, "mentor": p1, "mentee": p2
             }).execute()
-            # Update status
+            # Mark users as matched
             supabase.table("profiles").update({"status": "matched"}).eq("name", p1).execute()
             supabase.table("profiles").update({"status": "matched"}).eq("name", p2).execute()
     except: pass
@@ -151,7 +148,7 @@ if "user_name" not in st.session_state: st.session_state.user_name = ""
 st.title("Sahay: Precision Matchmaking 🎯")
 
 # ---------------------------------------------------------
-# STAGE 1: DETAILED PROFILE
+# STAGE 1: PROFILE
 # ---------------------------------------------------------
 if st.session_state.stage == 1:
     st.header("Step 1: Your Profile")
@@ -168,9 +165,9 @@ if st.session_state.stage == 1:
     st.subheader("Academic Details")
     c1, c2 = st.columns(2)
     with c1:
-        subjects = st.multiselect("General Subjects", ["Math", "Science", "English", "History", "Physics"])
+        subjects = st.multiselect("Subjects", ["Math", "Science", "English", "History", "Physics"])
     with c2:
-        topics = st.text_input("Specific Topics? (e.g. Algebra, Thermodynamics, Grammar)")
+        topics = st.text_input("Specific Topics? (e.g. Algebra, Thermodynamics)")
 
     if st.button("Find Match", type="primary"):
         if name and subjects and languages:
@@ -186,25 +183,22 @@ if st.session_state.stage == 1:
                 st.session_state.stage = 2
                 st.rerun()
         else:
-            st.warning("Please fill all details (Name, Subjects, Language)")
+            st.warning("Please fill Name, Subjects & Languages")
 
 # ---------------------------------------------------------
 # STAGE 2: SEARCH
 # ---------------------------------------------------------
 elif st.session_state.stage == 2:
     st.header("Step 2: Analysis")
-    st.info(f"Looking for the best {st.session_state.profile['subjects']} expert...")
+    st.info(f"Looking for the best match...")
     
     if st.button("🔄 Analyze & Match"):
         match = find_best_match(st.session_state.profile)
         
         if match:
-            st.success(f"Perfect Match Found: **{match['name']}**")
-            st.write(f"**Grade:** {match['grade']}")
-            st.write(f"**Languages:** {match['languages']}")
-            st.write(f"**Expertise:** {match['specific_topics']}")
+            st.success(f"Match Found: **{match['name']}**")
+            st.caption(f"Speaks: {match['languages']}")
             
-            # Create Session
             m_id = create_match_record(st.session_state.user_name, match['name'])
             st.session_state.match_id = m_id
             st.session_state.partner_name = match['name']
@@ -213,19 +207,17 @@ elif st.session_state.stage == 2:
             st.session_state.stage = 3
             st.rerun()
         else:
-            st.warning("No high-quality match found yet. Waiting for better candidates...")
+            st.warning("No suitable match found yet. Please wait.")
 
 # ---------------------------------------------------------
-# STAGE 3: CHAT (Standard)
+# STAGE 3: CHAT
 # ---------------------------------------------------------
 elif st.session_state.stage == 3:
     st.header(f"Session: {st.session_state.user_name} & {st.session_state.partner_name}")
     
-    # Setup Chat UI
     col_chat, col_tools = st.columns([2, 1])
     
     with col_chat:
-        # Load Messages
         try:
             msgs = supabase.table("messages").select("*").eq("match_id", st.session_state.match_id).order("created_at").execute().data
         except: msgs = []
@@ -236,7 +228,6 @@ elif st.session_state.stage == 3:
                 with st.chat_message("user" if is_me else "assistant"):
                     st.write(f"**{m['sender']}**: {m['message']}")
 
-        # Input
         if prompt := st.chat_input("Message..."):
             supabase.table("messages").insert({
                 "match_id": st.session_state.match_id, "sender": st.session_state.user_name, "message": prompt
@@ -246,19 +237,20 @@ elif st.session_state.stage == 3:
     with col_tools:
         if st.button("Refresh Chat"): st.rerun()
         
-        # AI Helper (Robust Version)
+        # AI Hint (Stable)
         if st.button("🤖 AI Hint"):
             if ai_available:
                 try:
                     context = " ".join([m['message'] for m in msgs[-3:]])
-                    model = genai.GenerativeModel("gemini-2.0-flash")
+                    # Use Robust 1.5-Flash
+                    model = genai.GenerativeModel("gemini-1.5-flash")
                     resp = model.generate_content(f"Context: {context}. Give a hint.")
                     supabase.table("messages").insert({
                         "match_id": st.session_state.match_id, "sender": "AI Bot", "message": f"🤖 {resp.text}"
                     }).execute()
                     st.rerun()
                 except Exception as e:
-                    st.error("AI Busy, try again.")
+                    st.error("AI Busy/Error")
             else:
                 st.error("AI Key Missing")
 
