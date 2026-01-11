@@ -20,7 +20,7 @@ init_db()
 # PAGE CONFIG
 # =========================================================
 st.set_page_config(
-    page_title="Peer Learning Matchmaking System",
+    page_title="Sahay - Peer Learning Matchmaking System",
     layout="wide"
 )
 
