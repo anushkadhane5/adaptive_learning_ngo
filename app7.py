@@ -25,17 +25,17 @@ st.set_page_config(
 )
 
 # =========================================================
-# GLOBAL MODERN UI STYLES
+# GLOBAL UI STYLES
 # =========================================================
 st.markdown("""
 <style>
 
-/* Base typography */
+/* Typography */
 html, body, [class*="css"] {
     font-family: 'Inter', 'Segoe UI', sans-serif;
 }
 
-/* App background */
+/* Background */
 .stApp {
     background: linear-gradient(135deg, #f5f7fa, #eef1f5);
 }
@@ -48,21 +48,48 @@ html, body, [class*="css"] {
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.85);
     backdrop-filter: blur(12px);
     border-right: 1px solid rgba(200,200,200,0.3);
 }
 
 @media (prefers-color-scheme: dark) {
     section[data-testid="stSidebar"] {
-        background: rgba(20,20,20,0.85);
+        background: rgba(20,20,20,0.9);
         border-right: 1px solid rgba(255,255,255,0.1);
     }
 }
 
+/* Sidebar header */
+.sidebar-header {
+    padding: 1.2rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    margin-bottom: 1rem;
+}
+
+/* Navigation button */
+.nav-btn {
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 0.4rem;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: 0.2s ease;
+}
+
+.nav-btn:hover {
+    background: rgba(99,102,241,0.12);
+}
+
+.nav-active {
+    background: rgba(99,102,241,0.2);
+    border-left: 4px solid #4f46e5;
+}
+
 /* Cards */
 .card {
-    background: rgba(255,255,255,0.9);
+    background: rgba(255,255,255,0.92);
     border-radius: 18px;
     padding: 1.6rem;
     box-shadow: 0 12px 30px rgba(0,0,0,0.06);
@@ -76,25 +103,11 @@ section[data-testid="stSidebar"] {
     }
 }
 
-/* Headings */
-h1, h2, h3 {
-    font-weight: 600;
-    letter-spacing: -0.02em;
-}
-
 /* Buttons */
 .stButton > button {
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 0.6rem 1.2rem;
     font-weight: 500;
-}
-
-/* Inputs */
-.stTextInput input,
-.stSelectbox,
-.stMultiSelect,
-.stTextArea textarea {
-    border-radius: 10px;
 }
 
 </style>
@@ -115,6 +128,8 @@ if "profile" not in st.session_state:
     st.session_state.profile = {}
 if "current_match" not in st.session_state:
     st.session_state.current_match = None
+if "page" not in st.session_state:
+    st.session_state.page = "Dashboard"
 
 SUBJECTS = ["Mathematics", "English", "Science"]
 
@@ -126,17 +141,36 @@ if not st.session_state.logged_in:
     st.stop()
 
 # =========================================================
-# SIDEBAR
+# SIDEBAR NAVIGATION
 # =========================================================
 with st.sidebar:
-    st.markdown("### Sahay")
-    st.caption(f"Welcome, {st.session_state.user_name}")
 
-    page = st.radio(
-        "Navigation",
-        ["Dashboard", "Matchmaking", "Learning Materials", "Practice", "Admin"],
-        label_visibility="collapsed"
-    )
+    st.markdown(f"""
+    <div class="sidebar-header">
+        <h3 style="margin:0;">Sahay</h3>
+        <p style="margin:0;font-size:0.85rem;opacity:0.9;">
+            {st.session_state.user_name}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    nav_items = {
+        "Dashboard": "📊",
+        "Matchmaking": "🔗",
+        "Learning Materials": "📚",
+        "Practice": "✏️",
+        "Admin": "⚙️"
+    }
+
+    for page_name, icon in nav_items.items():
+        active = "nav-active" if st.session_state.page == page_name else ""
+        st.markdown(
+            f"<div class='nav-btn {active}'>{icon} {page_name}</div>",
+            unsafe_allow_html=True
+        )
+        if st.button(page_name, key=f"nav_{page_name}", use_container_width=True):
+            st.session_state.page = page_name
+            st.rerun()
 
     st.divider()
 
@@ -148,6 +182,8 @@ with st.sidebar:
         st.session_state.profile = {}
         st.session_state.current_match = None
         st.rerun()
+
+page = st.session_state.page
 
 # =========================================================
 # DATABASE LOADERS
@@ -168,10 +204,9 @@ def load_users():
     """)
     rows = cursor.fetchall()
 
-    mentors, mentees = [], []
-
+    mentors = []
     for r in rows:
-        user = {
+        mentors.append({
             "name": r[0],
             "role": r[1],
             "grade": r[2],
@@ -180,14 +215,8 @@ def load_users():
             "strong_subjects": r[5].split(",") if r[5] else [],
             "weak_subjects": r[6].split(",") if r[6] else [],
             "teaches": r[7].split(",") if r[7] else []
-        }
-
-        if user["role"] == "Teacher" or user["strong_subjects"]:
-            mentors.append(user)
-        if user["weak_subjects"]:
-            mentees.append(user)
-
-    return mentors, mentees
+        })
+    return mentors
 
 # =========================================================
 # MATCHING LOGIC
@@ -199,11 +228,11 @@ def calculate_match_score(mentee, mentor):
     for weak in mentee.get("weak_subjects", []):
         if weak in mentor.get("teaches", mentor.get("strong_subjects", [])):
             score += 50
-            reasons.append(f"{weak} subject match")
+            reasons.append(f"{weak} match")
 
     if mentor["time"] == mentee["time"]:
         score += 20
-        reasons.append("Same time slot")
+        reasons.append("Same time")
 
     if mentor["grade"] == mentee["grade"]:
         score += 10
@@ -231,74 +260,57 @@ if page == "Dashboard":
     dashboard_page()
 
 elif page == "Matchmaking":
-
     st.markdown("""
     <div class="card">
         <h2>Peer Learning Matchmaking</h2>
-        <p>Connect students and mentors based on skills, grade, and availability.</p>
+        <p>Find the best mentor based on compatibility.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    mentors, mentees = load_users()
+    mentors = load_users()
 
-    # -------------------------
-    # PROFILE CREATION
-    # -------------------------
     if st.session_state.stage == 1:
-        st.markdown("""
-        <div class="card">
-            <h3>Create Your Profile</h3>
-            <p>This helps us find the most suitable match for you.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
         with st.form("profile_form"):
             role = st.radio("Role", ["Student", "Teacher"], horizontal=True)
             grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 11)])
-            time_slot = st.selectbox("Preferred Time Slot", ["4-5 PM", "5-6 PM", "6-7 PM"])
+            time_slot = st.selectbox("Time Slot", ["4-5 PM", "5-6 PM", "6-7 PM"])
 
             strong, weak, teaches = [], [], []
-
             if role == "Student":
                 strong = st.multiselect("Strong Subjects", SUBJECTS)
                 weak = st.multiselect("Weak Subjects", SUBJECTS)
             else:
                 teaches = st.multiselect("Subjects You Teach", SUBJECTS)
 
-            submitted = st.form_submit_button("Save Profile & Find Match")
+            if st.form_submit_button("Save Profile & Find Match"):
+                cursor.execute("""
+                    INSERT INTO profiles
+                    (user_id, role, grade, class, time, strong_subjects, weak_subjects, teaches)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    st.session_state.user_id,
+                    role,
+                    grade,
+                    int(grade.split()[-1]),
+                    time_slot,
+                    ",".join(strong),
+                    ",".join(weak),
+                    ",".join(teaches)
+                ))
+                conn.commit()
 
-        if submitted:
-            cursor.execute("""
-                INSERT INTO profiles
-                (user_id, role, grade, class, time, strong_subjects, weak_subjects, teaches)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                st.session_state.user_id,
-                role,
-                grade,
-                int(grade.split()[-1]),
-                time_slot,
-                ",".join(strong),
-                ",".join(weak),
-                ",".join(teaches)
-            ))
-            conn.commit()
+                st.session_state.profile = {
+                    "role": role,
+                    "grade": grade,
+                    "class": int(grade.split()[-1]),
+                    "time": time_slot,
+                    "strong_subjects": strong,
+                    "weak_subjects": weak,
+                    "teaches": teaches
+                }
+                st.session_state.stage = 2
+                st.rerun()
 
-            st.session_state.profile = {
-                "role": role,
-                "grade": grade,
-                "class": int(grade.split()[-1]),
-                "time": time_slot,
-                "strong_subjects": strong,
-                "weak_subjects": weak,
-                "teaches": teaches
-            }
-            st.session_state.stage = 2
-            st.rerun()
-
-    # -------------------------
-    # MATCH RESULT
-    # -------------------------
     elif st.session_state.stage == 2:
         mentee = {"name": st.session_state.user_name, **st.session_state.profile}
         mentor, score, reasons = find_best_mentor(mentee, mentors)
@@ -318,42 +330,19 @@ elif page == "Matchmaking":
                 "mentee": mentee["name"]
             }
 
-            if st.button("Start Learning Session", type="primary"):
+            if st.button("Start Session", type="primary"):
                 st.session_state.stage = 3
                 st.rerun()
-        else:
-            st.warning("No suitable mentor found.")
 
-    # -------------------------
-    # SESSION
-    # -------------------------
     elif st.session_state.stage == 3:
-        st.markdown("""
-        <div class="card">
-            <h3>Learning Session</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.text_area("Session Notes / Chat", height=220)
-
+        st.text_area("Session Notes", height=220)
         if st.button("End Session"):
             st.session_state.stage = 4
             st.rerun()
 
-    # -------------------------
-    # RATING
-    # -------------------------
     elif st.session_state.stage == 4:
-        st.markdown("""
-        <div class="card">
-            <h3>Rate Your Session</h3>
-            <p>Your feedback helps improve the platform.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        rating = st.slider("Rating", 1, 5)
-
-        if st.button("Submit Feedback", type="primary"):
+        rating = st.slider("Rate Session", 1, 5)
+        if st.button("Submit Rating"):
             cursor.execute("""
                 INSERT INTO ratings (mentor, mentee, rating, session_date)
                 VALUES (?, ?, ?, ?)
@@ -364,10 +353,8 @@ elif page == "Matchmaking":
                 date.today()
             ))
             conn.commit()
-
-            st.success("Feedback submitted successfully.")
             st.session_state.stage = 1
-            st.rerun()
+            st.success("Feedback saved")
 
 elif page == "Learning Materials":
     materials_page()
