@@ -5,8 +5,8 @@ from streak import update_streak
 def practice_page():
 
     if not st.session_state.get("user_id"):
-    st.warning("Please log in to access practice.")
-    return
+        st.warning("Please log in to access practice.")
+        return
 
 
     profile = st.session_state.user_profile
