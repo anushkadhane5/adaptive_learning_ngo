@@ -1,30 +1,6 @@
 import streamlit as st
 from datetime import date
-
-# ---------- CONFIG ----------
-STREAK_LEVELS = [
-    (1, "Beginner 🌱"),
-    (3, "Consistent Learner 🌿"),
-    (6, "Study Champ 🌳"),
-    (11, "Knowledge Warrior 🌲"),
-    (21, "Legend 🏆")
-]
-
-UNLOCKS = {
-    3: "📘 Quote unlocked: 'Small steps every day.'",
-    7: "🎉 Achievement: 7-Day Learning Streak!",
-    14: "🔥 Quote unlocked: 'Consistency beats talent.'",
-    21: "🏆 LEGEND STATUS UNLOCKED"
-}
-
-EMOTIONAL_MESSAGES = {
-    0: "Your learning journey is waiting 🌱",
-    1: "Great start! Keep watering your plant 💧",
-    3: "Most people quit here. You didn’t 🔥",
-    5: "Your plant is growing strong 🌿",
-    7: "ONE WEEK STRONG 💪",
-    14: "Your discipline is inspiring 🌳",
-}
+from database import cursor, conn
 
 # ---------- INIT ----------
 def init_streak():
@@ -35,29 +11,78 @@ def init_streak():
     if "unlocks_seen" not in st.session_state:
         st.session_state.unlocks_seen = set()
 
+    user_id = st.session_state.get("user_id")
+    if not user_id:
+        return
+
+    # Load from DB (once per session)
+    cursor.execute(
+        "SELECT streak, last_active FROM user_streaks WHERE user_id=?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+
+    if row:
+        st.session_state.streak = row[0]
+        st.session_state.last_active = (
+            date.fromisoformat(row[1]) if row[1] else None
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO user_streaks (user_id, streak, last_active) VALUES (?, 0, NULL)",
+            (user_id,)
+        )
+        conn.commit()
+
 # ---------- UPDATE ----------
 def update_streak():
-    # ✅ SAFETY: ensure session vars exist
     init_streak()
 
     today = date.today()
+    last = st.session_state.last_active
 
-    if st.session_state.last_active != today:
-        if st.session_state.last_active is None:
+    if last != today:
+        if last is None:
             st.session_state.streak = 1
         else:
-            delta = (today - st.session_state.last_active).days
-            if delta == 1:
-                st.session_state.streak += 1
-            else:
-                st.session_state.streak = 1
+            delta = (today - last).days
+            st.session_state.streak = (
+                st.session_state.streak + 1 if delta == 1 else 1
+            )
 
         st.session_state.last_active = today
+
+        cursor.execute("""
+            UPDATE user_streaks
+            SET streak=?, last_active=?
+            WHERE user_id=?
+        """, (
+            st.session_state.streak,
+            today.isoformat(),
+            st.session_state.user_id
+        ))
+        conn.commit()
         return True
 
     return False
 
-# ---------- UI HELPERS ----------
+# ---------- UI ----------
+STREAK_LEVELS = [
+    (1, "Beginner 🌱"),
+    (3, "Consistent Learner 🌿"),
+    (6, "Study Champ 🌳"),
+    (11, "Knowledge Warrior 🌲"),
+    (21, "Legend 🏆")
+]
+
+EMOTIONAL_MESSAGES = {
+    0: "Your learning journey is waiting 🌱",
+    1: "Great start! Keep going 💧",
+    3: "Consistency beats talent 🔥",
+    7: "One week strong 💪",
+    14: "Discipline is power 🌳",
+}
+
 def get_streak_level(streak):
     level = "Beginner 🌱"
     for days, name in STREAK_LEVELS:
@@ -66,9 +91,8 @@ def get_streak_level(streak):
     return level
 
 def get_message(streak):
-    keys = sorted(EMOTIONAL_MESSAGES.keys())
-    msg = EMOTIONAL_MESSAGES[keys[0]]
-    for k in keys:
+    msg = EMOTIONAL_MESSAGES[0]
+    for k in sorted(EMOTIONAL_MESSAGES):
         if streak >= k:
             msg = EMOTIONAL_MESSAGES[k]
     return msg
@@ -85,7 +109,3 @@ def render_streak_ui():
     progress = min(streak % 7 or 7, 7)
     st.progress(progress / 7)
     st.caption(f"Weekly Progress: {progress}/7 days")
-
-    if streak in UNLOCKS and streak not in st.session_state.unlocks_seen:
-        st.success(UNLOCKS[streak])
-        st.session_state.unlocks_seen.add(streak)
