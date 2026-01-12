@@ -154,7 +154,7 @@ def matchmaking_page():
         "weak": (weak or "").split(",")
     }
 
-    # ================= LIVE SESSION =================
+    # ================= PEER CHAT (ONLY IF MATCHED) =================
     if match_id:
         st.subheader("Live Learning Room")
 
@@ -169,46 +169,19 @@ def matchmaking_page():
         if partner:
             st.info(f"Paired with **{partner[0]}**")
 
-        # -------- CHAT DISPLAY --------
-        chat_box = st.container(height=400)
+        chat_box = st.container(height=350)
         with chat_box:
             for sender, msg in load_messages(match_id):
                 st.markdown(f"**{sender}:** {msg}")
 
-        # -------- SEND MESSAGE --------
         with st.form("chat_form", clear_on_submit=True):
-            message = st.text_input("Type your message")
+            message = st.text_input("Type message to partner")
             send = st.form_submit_button("Send")
 
             if send and message.strip():
                 send_message(match_id, current_user["name"], message)
                 st.rerun()
 
-        # -------- SIMPLE AI CHATBOT --------
-        st.divider()
-        st.subheader("AI Tutor (Ask your doubt)")
-
-        with st.form("ai_form", clear_on_submit=True):
-            ai_question = st.text_input(
-                "Ask the AI tutor",
-                placeholder="e.g. Explain photosynthesis"
-            )
-            ask = st.form_submit_button("Ask AI")
-
-            if ask and ai_question.strip():
-                send_message(
-                    match_id,
-                    current_user["name"],
-                    f"🤖 AI Question: {ai_question}"
-                )
-
-                with st.spinner("AI is replying..."):
-                    ai_reply = ask_ai(ai_question)
-
-                send_message(match_id, "AI Tutor", ai_reply)
-                st.rerun()
-
-        # -------- END SESSION --------
         if st.button("End Session"):
             cursor.execute("""
                 UPDATE profiles
@@ -217,8 +190,25 @@ def matchmaking_page():
             """, (match_id,))
             conn.commit()
             st.rerun()
+    else:
+        st.info("You are not matched yet. You can still ask doubts to the AI tutor below.")
 
-        return
+    # ================= AI CHATBOT (ALWAYS VISIBLE) =================
+    st.divider()
+    st.subheader("AI Tutor")
+
+    with st.form("ai_form", clear_on_submit=True):
+        ai_question = st.text_input(
+            "Ask your doubt",
+            placeholder="e.g. Explain photosynthesis"
+        )
+        ask = st.form_submit_button("Ask AI")
+
+        if ask and ai_question.strip():
+            with st.spinner("AI is thinking..."):
+                ai_reply = ask_ai(ai_question)
+
+            st.success(ai_reply)
 
     # ================= FIND MATCH =================
     if st.button("Find Best Match", use_container_width=True):
