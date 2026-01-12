@@ -10,7 +10,7 @@ MATCH_THRESHOLD = 50
 SESSION_TIMEOUT_MIN = 60
 
 # =========================================================
-# SAFE DB MIGRATION (RUNS ONCE, NO DATA LOSS)
+# SAFE DB MIGRATION (NO ERRORS EVEN IF RUN MANY TIMES)
 # =========================================================
 def migrate_profiles_table():
     try:
@@ -32,7 +32,7 @@ def migrate_profiles_table():
 migrate_profiles_table()
 
 # =========================================================
-# CREATE CHAT TABLE IF NOT EXISTS
+# CHAT TABLE
 # =========================================================
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages (
@@ -46,11 +46,11 @@ CREATE TABLE IF NOT EXISTS messages (
 conn.commit()
 
 # =========================================================
-# CLEANUP STALE USERS (SQLITE SAFE)
+# CLEANUP STALE USERS (SQLITE-SAFE)
 # =========================================================
 def cleanup_stale_profiles():
-    expiry = (datetime.now() - timedelta(minutes=SESSION_TIMEOUT_MIN))\
-                .strftime("%Y-%m-%d %H:%M:%S")
+    expiry = (datetime.now() - timedelta(minutes=SESSION_TIMEOUT_MIN)) \
+        .strftime("%Y-%m-%d %H:%M:%S")
 
     cursor.execute("""
         DELETE FROM profiles
@@ -77,7 +77,7 @@ def load_profiles():
             a.name,
             p.role,
             p.grade,
-            p.time,
+            p.time_slot,
             p.strong_subjects,
             p.weak_subjects,
             p.teaches
@@ -94,19 +94,20 @@ def load_profiles():
             "name": r[1],
             "role": r[2],
             "grade": r[3],
-            "time": r[4],
+            "time_slot": r[4],
             "strong": r[7].split(",") if r[7] else r[5].split(",") if r[5] else [],
             "weak": r[6].split(",") if r[6] else []
         })
     return users
 
 # =========================================================
-# MATCH SCORING LOGIC
+# MATCH SCORING
 # =========================================================
 def calculate_match_score(mentor, mentee):
     score = 0
     reasons = []
 
+    # Weak ↔ Strong
     for s in mentee["weak"]:
         if s in mentor["strong"]:
             score += 50
@@ -119,7 +120,7 @@ def calculate_match_score(mentor, mentee):
         score += 20
         reasons.append("Same grade")
 
-    if mentor["time"] == mentee["time"]:
+    if mentor["time_slot"] == mentee["time_slot"]:
         score += 20
         reasons.append("Same time slot")
 
@@ -176,7 +177,7 @@ def send_message(match_id, sender, message):
     conn.commit()
 
 # =========================================================
-# MAIN MATCHMAKING PAGE
+# MAIN PAGE
 # =========================================================
 def matchmaking_page():
 
@@ -187,8 +188,11 @@ def matchmaking_page():
     </div>
     """, unsafe_allow_html=True)
 
+    # -------------------------------------------------
+    # LOAD CURRENT USER
+    # -------------------------------------------------
     cursor.execute("""
-        SELECT role, grade, time, strong_subjects, weak_subjects, teaches, status
+        SELECT role, grade, time_slot, strong_subjects, weak_subjects, teaches, status
         FROM profiles
         WHERE user_id=?
     """, (st.session_state.user_id,))
@@ -205,7 +209,7 @@ def matchmaking_page():
         "name": st.session_state.user_name,
         "role": role,
         "grade": grade,
-        "time": time_slot,
+        "time_slot": time_slot,
         "strong": teaches.split(",") if teaches else strong.split(",") if strong else [],
         "weak": weak.split(",") if weak else []
     }
@@ -223,18 +227,31 @@ def matchmaking_page():
         with chat:
             for sender, msg in msgs:
                 if sender == current_user["name"]:
-                    st.markdown(f"<div class='chat-bubble-me'>{msg}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div class='chat-bubble-me'>{msg}</div>",
+                        unsafe_allow_html=True
+                    )
                 else:
-                    st.markdown(f"<div class='chat-bubble-partner'><b>{sender}:</b> {msg}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div class='chat-bubble-partner'><b>{sender}:</b> {msg}</div>",
+                        unsafe_allow_html=True
+                    )
 
         with st.form("chat_form", clear_on_submit=True):
             txt = st.text_input("Message")
             if st.form_submit_button("Send") and txt:
-                send_message(st.session_state.match_id, current_user["name"], txt)
+                send_message(
+                    st.session_state.match_id,
+                    current_user["name"],
+                    txt
+                )
                 st.rerun()
 
         if st.button("🛑 End Session"):
-            delete_user_session(current_user["user_id"], st.session_state.match_id)
+            delete_user_session(
+                current_user["user_id"],
+                st.session_state.match_id
+            )
             st.session_state.match_id = None
             st.rerun()
 
@@ -273,6 +290,5 @@ def matchmaking_page():
 
             time.sleep(1)
             st.rerun()
-
         else:
             st.warning("No suitable match right now. Try again later.")
