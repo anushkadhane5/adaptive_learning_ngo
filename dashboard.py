@@ -1,21 +1,46 @@
-import streamlit as st 
-import time from datetime 
-import timedelta from database 
-import cursor, conn
+import streamlit as st
+import time
+from datetime import timedelta
+from database import cursor, conn
 
+# -----------------------------------------------------
+# CONSTANTS
+# -----------------------------------------------------
+SUBJECTS = ["Mathematics", "English", "Science"]
+TIME_SLOTS = ["4-5 PM", "5-6 PM", "6-7 PM"]
+
+# -----------------------------------------------------
+# HELPERS
+# -----------------------------------------------------
+def calculate_streak(dates):
+    if not dates:
+        return 0
+
+    dates = sorted(set(dates), reverse=True)
+    streak = 1
+    for i in range(len(dates) - 1):
+        if dates[i] - dates[i + 1] == timedelta(days=1):
+            streak += 1
+        else:
+            break
+    return streak
+
+
+# =====================================================
+# DASHBOARD PAGE
+# =====================================================
 def dashboard_page():
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # HERO
-    # -----------------------------------------------------
-    st.container()
+    # -------------------------------------------------
     st.markdown(f"## 👋 Welcome back, {st.session_state.user_name}")
     st.caption("Your learning journey at a glance")
     st.divider()
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # PROFILE FETCH
-    # -----------------------------------------------------
+    # -------------------------------------------------
     cursor.execute("""
         SELECT role, grade, time, strong_subjects, weak_subjects, teaches
         FROM profiles
@@ -25,9 +50,9 @@ def dashboard_page():
 
     edit_mode = st.session_state.get("edit_profile", False)
 
-    # =====================================================
+    # -------------------------------------------------
     # PROFILE SETUP / EDIT
-    # =====================================================
+    # -------------------------------------------------
     if not profile or edit_mode:
         st.subheader("📝 Profile Setup")
 
@@ -70,9 +95,9 @@ def dashboard_page():
 
         return
 
-    # =====================================================
-    # PROFILE VIEW (STREAMLIT ONLY)
-    # =====================================================
+    # -------------------------------------------------
+    # PROFILE VIEW
+    # -------------------------------------------------
     role, grade, time_slot, strong, weak, teaches = profile
 
     strong_list = strong.split(",") if strong else []
@@ -81,12 +106,9 @@ def dashboard_page():
 
     st.subheader("👤 Your Profile")
 
-    # --- Avatar + Basic Info ---
     col1, col2 = st.columns([1, 4])
-
     with col1:
         st.markdown("### 🧑")
-
     with col2:
         st.write(f"**Role:** {role}")
         st.write(f"**Grade:** {grade}")
@@ -94,7 +116,7 @@ def dashboard_page():
 
     st.divider()
 
-    # --- Strong Subjects ---
+    # Strong Subjects
     st.markdown("### 🟢 Strong Subjects")
     if strong_list or teach_list:
         for subject in (strong_list or teach_list):
@@ -102,7 +124,7 @@ def dashboard_page():
     else:
         st.info("No strong subjects added")
 
-    # --- Weak Subjects ---
+    # Weak Subjects
     st.markdown("### 🔴 Weak Subjects")
     if weak_list:
         for subject in weak_list:
@@ -116,9 +138,9 @@ def dashboard_page():
         st.session_state.edit_profile = True
         st.rerun()
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # SESSION DATA
-    # -----------------------------------------------------
+    # -------------------------------------------------
     cursor.execute("""
         SELECT mentor, rating, session_date
         FROM ratings
@@ -132,9 +154,9 @@ def dashboard_page():
     total_sessions = len(rows)
     avg_rating = round(sum(r[1] for r in rows) / total_sessions, 2) if total_sessions else "—"
 
-    # -----------------------------------------------------
+    # -------------------------------------------------
     # STATS
-    # -----------------------------------------------------
+    # -------------------------------------------------
     st.subheader("📊 Your Progress")
 
     c1, c2, c3, c4 = st.columns(4)
