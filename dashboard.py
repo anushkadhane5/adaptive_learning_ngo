@@ -29,7 +29,7 @@ def calculate_streak(dates):
 def dashboard_page():
 
     # -----------------------------------------------------
-    # CSS: SVG ICONS + ANIMATIONS
+    # CSS: ICONS, CHIPS, ANIMATIONS
     # -----------------------------------------------------
     st.markdown("""
     <style>
@@ -47,6 +47,7 @@ def dashboard_page():
         box-shadow: 0 16px 40px rgba(0,0,0,0.12);
     }
 
+    /* SVG icons */
     .icon {
         width:18px;
         height:18px;
@@ -60,11 +61,48 @@ def dashboard_page():
         -webkit-mask-repeat: no-repeat;
         -webkit-mask-position: center;
     }
+    .icon-user {
+        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='8' r='4'/><path d='M4 20c0-4 4-6 8-6s8 2 8 6'/></svg>");
+    }
+    .icon-star {
+        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l3 7h7l-5.5 4.5L18 21l-6-3.5L6 21l1.5-7.5L2 9h7z'/></svg>");
+    }
+    .icon-alert {
+        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l10 20H2L12 2z'/></svg>");
+    }
+    .icon-edit {
+        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 21l3-1 12-12-2-2L4 18l-1 3z'/></svg>");
+    }
 
-    .icon-user { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='8' r='4'/><path d='M4 20c0-4 4-6 8-6s8 2 8 6'/></svg>"); }
-    .icon-star { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l3 7h7l-5.5 4.5L18 21l-6-3.5L6 21l1.5-7.5L2 9h7z'/></svg>"); }
-    .icon-alert { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l10 20H2L12 2z'/></svg>"); }
-    .icon-edit { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 21l3-1 12-12-2-2L4 18l-1 3z'/></svg>"); }
+    /* Subject chips */
+    .subject-chip {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        margin-right: 6px;
+        margin-top: 4px;
+    }
+    .chip-strong {
+        background: rgba(34,197,94,0.15);
+        color: #15803d;
+    }
+    .chip-weak {
+        background: rgba(239,68,68,0.15);
+        color: #b91c1c;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .chip-strong {
+            background: rgba(34,197,94,0.25);
+            color: #4ade80;
+        }
+        .chip-weak {
+            background: rgba(239,68,68,0.25);
+            color: #f87171;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -88,11 +126,11 @@ def dashboard_page():
     """, (st.session_state.user_id,))
     profile = cursor.fetchone()
 
+    edit_mode = st.session_state.get("edit_profile", False)
+
     # =====================================================
     # PROFILE SETUP / EDIT
     # =====================================================
-    edit_mode = st.session_state.get("edit_profile", False)
-
     if not profile or edit_mode:
         st.markdown("""
         <div class="card fade-in">
@@ -148,6 +186,16 @@ def dashboard_page():
     weak_list = weak.split(",") if weak else []
     teach_list = teaches.split(",") if teaches else []
 
+    strong_html = "".join(
+        f"<span class='subject-chip chip-strong'>{s}</span>"
+        for s in (strong_list or teach_list)
+    ) or "<span>—</span>"
+
+    weak_html = "".join(
+        f"<span class='subject-chip chip-weak'>{w}</span>"
+        for w in weak_list
+    ) or "<span>—</span>"
+
     # -----------------------------------------------------
     # PROFILE CARD
     # -----------------------------------------------------
@@ -158,8 +206,8 @@ def dashboard_page():
         <p><strong>Grade:</strong> {grade}</p>
         <p><strong>Time Slot:</strong> {time_slot}</p>
 
-        <p><span class="icon icon-star"></span><strong>Strong Subjects:</strong> {", ".join(strong_list or teach_list) or "—"}</p>
-        <p><span class="icon icon-alert"></span><strong>Weak Subjects:</strong> {", ".join(weak_list) or "—"}</p>
+        <p><span class="icon icon-star"></span><strong>Strong Subjects:</strong><br>{strong_html}</p>
+        <p><span class="icon icon-alert"></span><strong>Weak Subjects:</strong><br>{weak_html}</p>
     </div>
     """, unsafe_allow_html=True)
 
