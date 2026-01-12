@@ -10,7 +10,17 @@ MATCH_THRESHOLD = 50
 SESSION_TIMEOUT_MIN = 60
 
 # =========================================================
-# SAFE DB MIGRATION (NO ERRORS EVEN IF RUN MANY TIMES)
+# SCHEMA DETECTION (CRITICAL FIX)
+# =========================================================
+def get_time_column():
+    cursor.execute("PRAGMA table_info(profiles)")
+    cols = [c[1] for c in cursor.fetchall()]
+    return "time_slot" if "time_slot" in cols else "time"
+
+TIME_COL = get_time_column()
+
+# =========================================================
+# SAFE DB MIGRATION
 # =========================================================
 def migrate_profiles_table():
     try:
@@ -46,13 +56,13 @@ CREATE TABLE IF NOT EXISTS messages (
 conn.commit()
 
 # =========================================================
-# CLEANUP STALE USERS (SQLITE-SAFE)
+# CLEANUP STALE USERS
 # =========================================================
 def cleanup_stale_profiles():
     expiry = (datetime.now() - timedelta(minutes=SESSION_TIMEOUT_MIN)) \
         .strftime("%Y-%m-%d %H:%M:%S")
 
-    cursor.execute("""
+    cursor.execute(f"""
         DELETE FROM profiles
         WHERE status='waiting'
         AND datetime(created_at) < datetime(?)
@@ -60,7 +70,7 @@ def cleanup_stale_profiles():
     conn.commit()
 
 # =========================================================
-# EXPLICIT SESSION DELETE
+# DELETE SESSION
 # =========================================================
 def delete_user_session(user_id, match_id):
     cursor.execute("DELETE FROM profiles WHERE user_id=?", (user_id,))
@@ -71,13 +81,13 @@ def delete_user_session(user_id, match_id):
 # LOAD ACTIVE PROFILES
 # =========================================================
 def load_profiles():
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT 
             a.id,
             a.name,
             p.role,
             p.grade,
-            p.time_slot,
+            p.{TIME_COL},
             p.strong_subjects,
             p.weak_subjects,
             p.teaches
@@ -94,7 +104,7 @@ def load_profiles():
             "name": r[1],
             "role": r[2],
             "grade": r[3],
-            "time_slot": r[4],
+            "time": r[4],
             "strong": r[7].split(",") if r[7] else r[5].split(",") if r[5] else [],
             "weak": r[6].split(",") if r[6] else []
         })
@@ -107,7 +117,6 @@ def calculate_match_score(mentor, mentee):
     score = 0
     reasons = []
 
-    # Weak ↔ Strong
     for s in mentee["weak"]:
         if s in mentor["strong"]:
             score += 50
@@ -120,7 +129,7 @@ def calculate_match_score(mentor, mentee):
         score += 20
         reasons.append("Same grade")
 
-    if mentor["time_slot"] == mentee["time_slot"]:
+    if mentor["time"] == mentee["time"]:
         score += 20
         reasons.append("Same time slot")
 
@@ -188,11 +197,8 @@ def matchmaking_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # -------------------------------------------------
-    # LOAD CURRENT USER
-    # -------------------------------------------------
-    cursor.execute("""
-        SELECT role, grade, time_slot, strong_subjects, weak_subjects, teaches, status
+    cursor.execute(f"""
+        SELECT role, grade, {TIME_COL}, strong_subjects, weak_subjects, teaches, status
         FROM profiles
         WHERE user_id=?
     """, (st.session_state.user_id,))
@@ -202,21 +208,19 @@ def matchmaking_page():
         st.warning("Please complete your profile first.")
         return
 
-    role, grade, time_slot, strong, weak, teaches, status = profile
+    role, grade, time_val, strong, weak, teaches, status = profile
 
     current_user = {
         "user_id": st.session_state.user_id,
         "name": st.session_state.user_name,
         "role": role,
         "grade": grade,
-        "time_slot": time_slot,
+        "time": time_val,
         "strong": teaches.split(",") if teaches else strong.split(",") if strong else [],
         "weak": weak.split(",") if weak else []
     }
 
-    # -------------------------------------------------
-    # CHAT MODE
-    # -------------------------------------------------
+    # ---------------- CHAT MODE ----------------
     if "match_id" in st.session_state and st.session_state.match_id:
 
         st.subheader("Live Chat")
@@ -227,39 +231,24 @@ def matchmaking_page():
         with chat:
             for sender, msg in msgs:
                 if sender == current_user["name"]:
-                    st.markdown(
-                        f"<div class='chat-bubble-me'>{msg}</div>",
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f"<div class='chat-bubble-me'>{msg}</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(
-                        f"<div class='chat-bubble-partner'><b>{sender}:</b> {msg}</div>",
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f"<div class='chat-bubble-partner'><b>{sender}:</b> {msg}</div>", unsafe_allow_html=True)
 
         with st.form("chat_form", clear_on_submit=True):
             txt = st.text_input("Message")
             if st.form_submit_button("Send") and txt:
-                send_message(
-                    st.session_state.match_id,
-                    current_user["name"],
-                    txt
-                )
+                send_message(st.session_state.match_id, current_user["name"], txt)
                 st.rerun()
 
         if st.button("🛑 End Session"):
-            delete_user_session(
-                current_user["user_id"],
-                st.session_state.match_id
-            )
+            delete_user_session(current_user["user_id"], st.session_state.match_id)
             st.session_state.match_id = None
             st.rerun()
 
         return
 
-    # -------------------------------------------------
-    # FIND MATCH
-    # -------------------------------------------------
+    # ---------------- MATCH ----------------
     if st.button("🔍 Find Best Match", use_container_width=True):
 
         all_users = load_profiles()
