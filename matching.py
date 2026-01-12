@@ -1,241 +1,168 @@
 import streamlit as st
 import os
-from datetime import datetime, timedelta
 from database import cursor, conn
 from ai_helper import ask_ai
 
-MATCH_THRESHOLD = 30
-SESSION_TIMEOUT_MIN = 60
 UPLOAD_DIR = "uploads/sessions"
+MATCH_THRESHOLD = 30
 
 # =========================================================
-# CLEANUP STALE USERS
-# =========================================================
-def cleanup_stale_profiles():
-    expiry = (datetime.now() - timedelta(minutes=SESSION_TIMEOUT_MIN)) \
-        .strftime("%Y-%m-%d %H:%M:%S")
-
-    cursor.execute("""
-        DELETE FROM profiles
-        WHERE status='waiting'
-        AND datetime(created_at) < datetime(?)
-    """, (expiry,))
-    conn.commit()
-
-# =========================================================
-# LOAD WAITING USERS
+# LOAD USERS
 # =========================================================
 def load_profiles():
     cursor.execute("""
-        SELECT 
-            a.id,
-            a.name,
-            p.role,
-            p.grade,
-            p.time,
-            p.strong_subjects,
-            p.weak_subjects,
-            p.teaches
+        SELECT a.id,a.name,p.role,p.grade,p.time,
+               p.strong_subjects,p.weak_subjects,p.teaches
         FROM profiles p
-        JOIN auth_users a ON a.id = p.user_id
+        JOIN auth_users a ON a.id=p.user_id
         WHERE p.status='waiting'
     """)
     rows = cursor.fetchall()
 
-    users = []
+    users=[]
     for r in rows:
         users.append({
-            "user_id": r[0],
-            "name": r[1],
-            "role": r[2],
-            "grade": r[3],
-            "time": r[4],
-            "strong": (r[7] or r[5] or "").split(","),
-            "weak": (r[6] or "").split(",")
+            "user_id":r[0],"name":r[1],"role":r[2],
+            "grade":r[3],"time":r[4],
+            "strong":(r[7] or r[5] or "").split(","),
+            "weak":(r[6] or "").split(",")
         })
     return users
 
 # =========================================================
-# MATCH SCORING
+# MATCH LOGIC
 # =========================================================
-def calculate_match_score(user1, user2):
-    score = 0
+def score(u1,u2):
+    s=0
+    s+=len(set(u1["weak"])&set(u2["strong"]))*25
+    s+=len(set(u2["weak"])&set(u1["strong"]))*25
+    if u1["grade"]==u2["grade"]: s+=10
+    if u1["time"]==u2["time"]: s+=10
+    return s
 
-    if user1["role"] == "Student" and user2["role"] == "Student":
-        for s in user1["weak"]:
-            if s and s in user2["strong"]:
-                score += 25
-        for s in user2["weak"]:
-            if s and s in user1["strong"]:
-                score += 25
-    else:
-        mentor = user1 if user1["role"] == "Teacher" else user2
-        mentee = user2 if mentor == user1 else user1
-        for s in mentee["weak"]:
-            if s and s in mentor["strong"]:
-                score += 30
-
-    if user1["grade"] == user2["grade"]:
-        score += 10
-    if user1["time"] == user2["time"]:
-        score += 10
-
-    return score
+def find_best(current,users):
+    best,best_s=None,0
+    for u in users:
+        if u["user_id"]==current["user_id"]: continue
+        sc=score(current,u)
+        if sc>best_s:
+            best,best_s=u,sc
+    return (best,best_s) if best_s>=MATCH_THRESHOLD else (None,0)
 
 # =========================================================
-# FIND MATCH
+# CHAT + FILE HELPERS
 # =========================================================
-def find_best_match(current_user, all_users):
-    cleanup_stale_profiles()
-    best, best_score = None, 0
-
-    for other in all_users:
-        if other["user_id"] == current_user["user_id"]:
-            continue
-        if current_user["role"] == "Teacher" and other["role"] == "Teacher":
-            continue
-
-        score = calculate_match_score(current_user, other)
-        if score > best_score:
-            best, best_score = other, score
-
-    if best_score >= MATCH_THRESHOLD:
-        return best, best_score
-    return None, 0
-
-# =========================================================
-# CHAT HELPERS
-# =========================================================
-def load_messages(match_id):
-    cursor.execute("""
-        SELECT sender, message
-        FROM messages
-        WHERE match_id=?
-        ORDER BY created_at
-    """, (match_id,))
+def load_msgs(mid):
+    cursor.execute("SELECT sender,message FROM messages WHERE match_id=?",(mid,))
     return cursor.fetchall()
 
-def send_message(match_id, sender, message):
-    cursor.execute("""
-        INSERT INTO messages (match_id, sender, message)
-        VALUES (?, ?, ?)
-    """, (match_id, sender, message))
+def send_msg(mid,s,m):
+    cursor.execute("INSERT INTO messages(match_id,sender,message)VALUES(?,?,?)",(mid,s,m))
     conn.commit()
 
-# =========================================================
-# FILE HELPERS
-# =========================================================
-def save_file(match_id, uploader, uploaded_file):
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    safe_name = f"{match_id}_{uploaded_file.name}"
-    path = os.path.join(UPLOAD_DIR, safe_name)
-
-    with open(path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
+def save_file(mid,u,f):
+    os.makedirs(UPLOAD_DIR,exist_ok=True)
+    path=f"{UPLOAD_DIR}/{mid}_{f.name}"
+    with open(path,"wb") as out: out.write(f.getbuffer())
     cursor.execute("""
-        INSERT INTO session_files (match_id, uploader, filename, filepath)
-        VALUES (?, ?, ?, ?)
-    """, (match_id, uploader, uploaded_file.name, path))
+      INSERT INTO session_files(match_id,uploader,filename,filepath)
+      VALUES(?,?,?,?)
+    """,(mid,u,f.name,path))
     conn.commit()
 
-def load_session_files(match_id):
-    cursor.execute("""
-        SELECT uploader, filename, filepath
-        FROM session_files
-        WHERE match_id=?
-        ORDER BY uploaded_at DESC
-    """, (match_id,))
+def load_files(mid):
+    cursor.execute("SELECT uploader,filename,filepath FROM session_files WHERE match_id=?",(mid,))
     return cursor.fetchall()
 
 # =========================================================
-# MATCHMAKING PAGE
+# PAGE
 # =========================================================
 def matchmaking_page():
 
     cursor.execute("""
-        SELECT role, grade, time, strong_subjects, weak_subjects, teaches, match_id
-        FROM profiles
-        WHERE user_id=?
-    """, (st.session_state.user_id,))
-    profile = cursor.fetchone()
+      SELECT role,grade,time,strong_subjects,weak_subjects,teaches,match_id
+      FROM profiles WHERE user_id=?
+    """,(st.session_state.user_id,))
+    role,grade,time,strong,weak,teaches,match_id = cursor.fetchone()
 
-    if not profile:
-        st.warning("Please complete your profile first.")
-        return
-
-    role, grade, time_val, strong, weak, teaches, match_id = profile
-
-    current_user = {
-        "user_id": st.session_state.user_id,
-        "name": st.session_state.user_name,
-        "role": role,
-        "grade": grade,
-        "time": time_val,
-        "strong": (teaches or strong or "").split(","),
-        "weak": (weak or "").split(",")
+    user={
+        "user_id":st.session_state.user_id,
+        "name":st.session_state.user_name,
+        "role":role,"grade":grade,"time":time,
+        "strong":(teaches or strong or "").split(","),
+        "weak":(weak or "").split(",")
     }
 
-    # ================= AI CHATBOT (ALWAYS VISIBLE) =================
-    st.subheader("AI Tutor")
-
-    with st.form("ai_form", clear_on_submit=True):
-        ai_q = st.text_input("Ask the AI tutor")
-        ask = st.form_submit_button("Ask AI")
-        if ask and ai_q.strip():
-            st.success(ask_ai(ai_q))
+    # ================= AI TUTOR =================
+    st.markdown("### 🧠 AI Tutor")
+    with st.form("ai"):
+        q=st.text_input("Ask your doubt")
+        if st.form_submit_button("Ask") and q:
+            st.success(ask_ai(q))
 
     st.divider()
 
-    # ================= PEER SESSION (ONLY IF MATCHED) =================
-    if match_id:
-        st.subheader("Live Learning Room")
+    # ================= MATCH PREVIEW =================
+    if not match_id:
+        if st.button("🔍 Find Best Match"):
+            m,s=find_best(user,load_profiles())
+            if m:
+                st.session_state.proposed_match=m
+                st.session_state.proposed_score=s
 
-        for sender, msg in load_messages(match_id):
-            st.markdown(f"**{sender}:** {msg}")
+        if st.session_state.proposed_match:
+            m=st.session_state.proposed_match
+            st.markdown(f"""
+            <div class="card">
+            <h3>🤝 Match Found</h3>
+            <b>{m['name']}</b><br>
+            Role: {m['role']}<br>
+            Grade: {m['grade']}<br>
+            Time: {m['time']}<br>
+            Score: {st.session_state.proposed_score}
+            </div>
+            """,unsafe_allow_html=True)
 
-        with st.form("chat_form", clear_on_submit=True):
-            msg = st.text_input("Message to partner")
-            send = st.form_submit_button("Send")
-            if send and msg.strip():
-                send_message(match_id, current_user["name"], msg)
+            c1,c2=st.columns(2)
+            if c1.button("Confirm"):
+                mid=f"{user['user_id']}-{m['user_id']}"
+                cursor.execute("""
+                  UPDATE profiles SET status='matched',match_id=?
+                  WHERE user_id IN (?,?)
+                """,(mid,user["user_id"],m["user_id"]))
+                conn.commit()
+                st.session_state.proposed_match=None
                 st.rerun()
+            if c2.button("Cancel"):
+                st.session_state.proposed_match=None
+        return
 
-        st.divider()
-        st.subheader("Shared Files")
+    # ================= LIVE SESSION =================
+    st.markdown("""
+    <div class="card" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white">
+    <h2>🎓 Live Learning Room</h2>
+    </div>
+    """,unsafe_allow_html=True)
 
-        with st.form("file_form", clear_on_submit=True):
-            file = st.file_uploader("Upload file")
-            upload = st.form_submit_button("Upload")
-            if upload and file:
-                save_file(match_id, current_user["name"], file)
-                st.success("File uploaded")
-                st.rerun()
+    # CHAT
+    st.markdown("### 💬 Chat")
+    for s,m in load_msgs(match_id):
+        st.markdown(f"**{s}:** {m}")
 
-        for uploader, fname, path in load_session_files(match_id):
-            with open(path, "rb") as f:
-                st.download_button(
-                    label=f"{fname} (by {uploader})",
-                    data=f,
-                    file_name=fname
-                )
-
-    st.divider()
-
-    # ================= FIND MATCH =================
-    if st.button("Find Best Match", use_container_width=True):
-        users = load_profiles()
-        match, score = find_best_match(current_user, users)
-
-        if match:
-            mid = f"{current_user['user_id']}-{match['user_id']}"
-            cursor.execute("""
-                UPDATE profiles
-                SET status='matched', match_id=?
-                WHERE user_id IN (?, ?)
-            """, (mid, current_user["user_id"], match["user_id"]))
-            conn.commit()
-            st.success(f"Matched with {match['name']} (Score {score})")
+    with st.form("chat"):
+        msg=st.text_input("Message")
+        if st.form_submit_button("Send") and msg:
+            send_msg(match_id,user["name"],msg)
             st.rerun()
-        else:
-            st.warning("No suitable match found.")
+
+    # FILES
+    st.markdown("### 📁 Shared Files")
+    with st.form("files"):
+        f=st.file_uploader("Upload file")
+        if st.form_submit_button("Upload") and f:
+            save_file(match_id,user["name"],f)
+            st.rerun()
+
+    for u,n,p in load_files(match_id):
+        with open(p,"rb") as file:
+            st.download_button(f"📄 {n} (by {u})",file,file_name=n)
