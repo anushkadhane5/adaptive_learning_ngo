@@ -3,31 +3,36 @@ import time
 from datetime import datetime, timedelta
 from database import cursor, conn
 
-# ---- SAFE SCHEMA MIGRATION ----
+# =========================================================
+# CONSTANTS
+# =========================================================
+MATCH_THRESHOLD = 50
+SESSION_TIMEOUT_MIN = 60
+
+# =========================================================
+# SAFE DB MIGRATION (RUNS ONCE, NO DATA LOSS)
+# =========================================================
 def migrate_profiles_table():
     try:
-        cursor.execute("ALTER TABLE profiles ADD COLUMN status TEXT DEFAULT 'waiting'")
+        cursor.execute(
+            "ALTER TABLE profiles ADD COLUMN status TEXT DEFAULT 'waiting'"
+        )
     except:
-        pass  # column already exists
+        pass
 
     try:
-        cursor.execute("ALTER TABLE profiles ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        cursor.execute(
+            "ALTER TABLE profiles ADD COLUMN created_at TEXT DEFAULT (datetime('now'))"
+        )
     except:
-        pass  # column already exists
+        pass
 
     conn.commit()
 
 migrate_profiles_table()
 
 # =========================================================
-# CONSTANTS
-# =========================================================
-SUBJECTS = ["Mathematics", "English", "Science"]
-MATCH_THRESHOLD = 50
-SESSION_TIMEOUT_MIN = 60
-
-# =========================================================
-# DB SAFETY: CREATE REQUIRED TABLES IF NOT EXIST
+# CREATE CHAT TABLE IF NOT EXISTS
 # =========================================================
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages (
@@ -35,34 +40,35 @@ CREATE TABLE IF NOT EXISTS messages (
     match_id TEXT,
     sender TEXT,
     message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (datetime('now'))
 )
 """)
-
 conn.commit()
 
 # =========================================================
-# CLEANUP STALE USERS (ZOMBIE PREVENTION)
+# CLEANUP STALE USERS (SQLITE SAFE)
 # =========================================================
 def cleanup_stale_profiles():
-    expiry = datetime.now() - timedelta(minutes=SESSION_TIMEOUT_MIN)
+    expiry = (datetime.now() - timedelta(minutes=SESSION_TIMEOUT_MIN))\
+                .strftime("%Y-%m-%d %H:%M:%S")
+
     cursor.execute("""
         DELETE FROM profiles
-        WHERE status='waiting' AND created_at < ?
+        WHERE status='waiting'
+        AND datetime(created_at) < datetime(?)
     """, (expiry,))
     conn.commit()
 
 # =========================================================
-# DELETE USER + CHAT (EXPLICIT CLEANUP)
+# EXPLICIT SESSION DELETE
 # =========================================================
-def delete_user_session(user_id, match_id=None):
+def delete_user_session(user_id, match_id):
     cursor.execute("DELETE FROM profiles WHERE user_id=?", (user_id,))
-    if match_id:
-        cursor.execute("DELETE FROM messages WHERE match_id=?", (match_id,))
+    cursor.execute("DELETE FROM messages WHERE match_id=?", (match_id,))
     conn.commit()
 
 # =========================================================
-# LOAD ALL ACTIVE PROFILES
+# LOAD ACTIVE PROFILES
 # =========================================================
 def load_profiles():
     cursor.execute("""
@@ -74,8 +80,7 @@ def load_profiles():
             p.time,
             p.strong_subjects,
             p.weak_subjects,
-            p.teaches,
-            p.status
+            p.teaches
         FROM profiles p
         JOIN auth_users a ON a.id = p.user_id
         WHERE p.status='waiting'
@@ -96,27 +101,24 @@ def load_profiles():
     return users
 
 # =========================================================
-# MATCH SCORING (REAL LOGIC)
+# MATCH SCORING LOGIC
 # =========================================================
 def calculate_match_score(mentor, mentee):
     score = 0
     reasons = []
 
-    # Weak ↔ Strong (CRITICAL)
     for s in mentee["weak"]:
         if s in mentor["strong"]:
             score += 50
-            reasons.append(f"{mentor['name']} strong in {s}")
+            reasons.append(f"Strong in {s}")
 
     if score == 0:
         return 0, []
 
-    # Same grade
     if mentor["grade"] == mentee["grade"]:
         score += 20
         reasons.append("Same grade")
 
-    # Same time
     if mentor["time"] == mentee["time"]:
         score += 20
         reasons.append("Same time slot")
@@ -124,7 +126,7 @@ def calculate_match_score(mentor, mentee):
     return score, reasons
 
 # =========================================================
-# FIND BEST MATCH (COMPETITIVE)
+# FIND BEST MATCH
 # =========================================================
 def find_best_match(current_user, all_users):
     cleanup_stale_profiles()
@@ -159,7 +161,7 @@ def find_best_match(current_user, all_users):
 # =========================================================
 def load_messages(match_id):
     cursor.execute("""
-        SELECT sender, message, created_at
+        SELECT sender, message
         FROM messages
         WHERE match_id=?
         ORDER BY created_at ASC
@@ -181,13 +183,10 @@ def matchmaking_page():
     st.markdown("""
     <div class="card">
         <h2>Peer Learning Matchmaking</h2>
-        <p>We intelligently match students and mentors in real time.</p>
+        <p>Smart matching with real-time chat.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # -------------------------------------------------
-    # LOAD CURRENT USER PROFILE
-    # -------------------------------------------------
     cursor.execute("""
         SELECT role, grade, time, strong_subjects, weak_subjects, teaches, status
         FROM profiles
@@ -212,18 +211,17 @@ def matchmaking_page():
     }
 
     # -------------------------------------------------
-    # IF ALREADY MATCHED → CHAT
+    # CHAT MODE
     # -------------------------------------------------
     if "match_id" in st.session_state and st.session_state.match_id:
 
         st.subheader("Live Chat")
 
         msgs = load_messages(st.session_state.match_id)
-        chat_box = st.container(height=420)
+        chat = st.container(height=400)
 
-        with chat_box:
-            for m in msgs:
-                sender, msg, _ = m
+        with chat:
+            for sender, msg in msgs:
                 if sender == current_user["name"]:
                     st.markdown(f"<div class='chat-bubble-me'>{msg}</div>", unsafe_allow_html=True)
                 else:
@@ -235,7 +233,7 @@ def matchmaking_page():
                 send_message(st.session_state.match_id, current_user["name"], txt)
                 st.rerun()
 
-        if st.button("🛑 End Session", type="secondary"):
+        if st.button("🛑 End Session"):
             delete_user_session(current_user["user_id"], st.session_state.match_id)
             st.session_state.match_id = None
             st.rerun()
@@ -243,7 +241,7 @@ def matchmaking_page():
         return
 
     # -------------------------------------------------
-    # FIND MATCH BUTTON
+    # FIND MATCH
     # -------------------------------------------------
     if st.button("🔍 Find Best Match", use_container_width=True):
 
@@ -277,5 +275,4 @@ def matchmaking_page():
             st.rerun()
 
         else:
-            st.warning("No suitable match found right now. Try again later.")
-
+            st.warning("No suitable match right now. Try again later.")
