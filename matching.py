@@ -123,26 +123,25 @@ def send_message(match_id, sender, message):
     conn.commit()
 
 # =========================================================
-# FILE HELPERS (NEW)
+# FILE HELPERS
 # =========================================================
 def save_file(match_id, uploader, uploaded_file):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-
     safe_name = f"{match_id}_{uploaded_file.name}"
-    file_path = os.path.join(UPLOAD_DIR, safe_name)
+    path = os.path.join(UPLOAD_DIR, safe_name)
 
-    with open(file_path, "wb") as f:
+    with open(path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
     cursor.execute("""
         INSERT INTO session_files (match_id, uploader, filename, filepath)
         VALUES (?, ?, ?, ?)
-    """, (match_id, uploader, uploaded_file.name, file_path))
+    """, (match_id, uploader, uploaded_file.name, path))
     conn.commit()
 
 def load_session_files(match_id):
     cursor.execute("""
-        SELECT uploader, filename, filepath, uploaded_at
+        SELECT uploader, filename, filepath
         FROM session_files
         WHERE match_id=?
         ORDER BY uploaded_at DESC
@@ -177,50 +176,43 @@ def matchmaking_page():
         "weak": (weak or "").split(",")
     }
 
-    # ================= PEER CHAT =================
+    # ================= AI CHATBOT (ALWAYS VISIBLE) =================
+    st.subheader("AI Tutor")
+
+    with st.form("ai_form", clear_on_submit=True):
+        ai_q = st.text_input("Ask the AI tutor")
+        ask = st.form_submit_button("Ask AI")
+        if ask and ai_q.strip():
+            st.success(ask_ai(ai_q))
+
+    st.divider()
+
+    # ================= PEER SESSION (ONLY IF MATCHED) =================
     if match_id:
         st.subheader("Live Learning Room")
 
-        chat_box = st.container(height=300)
-        with chat_box:
-            for sender, msg in load_messages(match_id):
-                st.markdown(f"**{sender}:** {msg}")
+        for sender, msg in load_messages(match_id):
+            st.markdown(f"**{sender}:** {msg}")
 
         with st.form("chat_form", clear_on_submit=True):
-            msg = st.text_input("Message")
+            msg = st.text_input("Message to partner")
             send = st.form_submit_button("Send")
             if send and msg.strip():
                 send_message(match_id, current_user["name"], msg)
                 st.rerun()
 
-        # ================= AI CHATBOT =================
-        st.divider()
-        st.subheader("AI Tutor")
-
-        with st.form("ai_form", clear_on_submit=True):
-            ai_q = st.text_input("Ask AI")
-            ask = st.form_submit_button("Ask")
-            if ask and ai_q.strip():
-                st.success(ask_ai(ai_q))
-
-        # ================= FILE SHARING =================
         st.divider()
         st.subheader("Shared Files")
 
         with st.form("file_form", clear_on_submit=True):
-            file = st.file_uploader(
-                "Upload file",
-                type=["pdf", "png", "jpg", "jpeg", "txt", "docx"]
-            )
+            file = st.file_uploader("Upload file")
             upload = st.form_submit_button("Upload")
-
             if upload and file:
                 save_file(match_id, current_user["name"], file)
                 st.success("File uploaded")
                 st.rerun()
 
-        files = load_session_files(match_id)
-        for uploader, fname, path, _ in files:
+        for uploader, fname, path in load_session_files(match_id):
             with open(path, "rb") as f:
                 st.download_button(
                     label=f"{fname} (by {uploader})",
@@ -228,20 +220,22 @@ def matchmaking_page():
                     file_name=fname
                 )
 
+    st.divider()
+
     # ================= FIND MATCH =================
     if st.button("Find Best Match", use_container_width=True):
-        all_users = load_profiles()
-        match, score = find_best_match(current_user, all_users)
+        users = load_profiles()
+        match, score = find_best_match(current_user, users)
 
         if match:
-            match_id = f"{current_user['user_id']}-{match['user_id']}"
+            mid = f"{current_user['user_id']}-{match['user_id']}"
             cursor.execute("""
                 UPDATE profiles
                 SET status='matched', match_id=?
                 WHERE user_id IN (?, ?)
-            """, (match_id, current_user["user_id"], match["user_id"]))
+            """, (mid, current_user["user_id"], match["user_id"]))
             conn.commit()
             st.success(f"Matched with {match['name']} (Score {score})")
             st.rerun()
         else:
-            st.warning("No match found.")
+            st.warning("No suitable match found.")
