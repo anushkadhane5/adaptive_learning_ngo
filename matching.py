@@ -109,7 +109,7 @@ def find_best_match(current_user, all_users):
         if other["user_id"] == current_user["user_id"]:
             continue
 
-        # block Teacher–Teacher
+        # Block Teacher–Teacher
         if current_user["role"] == "Teacher" and other["role"] == "Teacher":
             continue
 
@@ -179,13 +179,13 @@ def matchmaking_page():
 
         st.subheader("Live Learning Room")
 
-        # 🔁 Auto refresh every 2 seconds
+        # Auto-refresh every 2 seconds
         if "last_refresh" not in st.session_state:
             st.session_state.last_refresh = time.time()
 
         if time.time() - st.session_state.last_refresh > 2:
             st.session_state.last_refresh = time.time()
-            st.experimental_rerun()
+            st.rerun()
 
         cursor.execute("""
             SELECT a.name
@@ -212,7 +212,7 @@ def matchmaking_page():
             if message.strip():
                 send_message(match_id, current_user["name"], message)
                 st.session_state.chat_input = ""
-                st.experimental_rerun()
+                st.rerun()
 
         if st.button("End Session"):
             cursor.execute("""
@@ -221,7 +221,7 @@ def matchmaking_page():
                 WHERE match_id=?
             """, (match_id,))
             conn.commit()
-            st.experimental_rerun()
+            st.rerun()
 
         return
 
@@ -248,6 +248,6 @@ def matchmaking_page():
                 st.write("•", r)
 
             time.sleep(1)
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.warning("No suitable match right now. Try again later.")
