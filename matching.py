@@ -2,6 +2,8 @@ import streamlit as st
 import time
 from datetime import datetime, timedelta
 from database import cursor, conn
+from ai_helper import ask_ai
+
 
 MATCH_THRESHOLD = 30
 SESSION_TIMEOUT_MIN = 60
@@ -214,3 +216,4 @@ def matchmaking_page():
             st.rerun()
         else:
             st.warning("No suitable match right now.")
+
