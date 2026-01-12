@@ -3,19 +3,12 @@ import time
 from datetime import timedelta
 from database import cursor, conn
 
-# -----------------------------------------------------
-# CONSTANTS
-# -----------------------------------------------------
 SUBJECTS = ["Mathematics", "English", "Science"]
 TIME_SLOTS = ["4-5 PM", "5-6 PM", "6-7 PM"]
 
-# -----------------------------------------------------
-# HELPERS
-# -----------------------------------------------------
 def calculate_streak(dates):
     if not dates:
         return 0
-
     dates = sorted(set(dates), reverse=True)
     streak = 1
     for i in range(len(dates) - 1):
@@ -25,22 +18,12 @@ def calculate_streak(dates):
             break
     return streak
 
-
-# =====================================================
-# DASHBOARD PAGE
-# =====================================================
 def dashboard_page():
 
-    # -------------------------------------------------
-    # HERO (NO EMOJIS, NO SVG)
-    # -------------------------------------------------
     st.title(f"Welcome back, {st.session_state.user_name}")
     st.caption("Your learning journey at a glance")
     st.divider()
 
-    # -------------------------------------------------
-    # PROFILE FETCH
-    # -------------------------------------------------
     cursor.execute("""
         SELECT role, grade, time, strong_subjects, weak_subjects, teaches
         FROM profiles
@@ -50,15 +33,13 @@ def dashboard_page():
 
     edit_mode = st.session_state.get("edit_profile", False)
 
-    # -------------------------------------------------
-    # PROFILE SETUP / EDIT
-    # -------------------------------------------------
     if not profile or edit_mode:
         st.subheader("Profile Setup")
 
         with st.form("profile_form"):
             role = st.radio("Role", ["Student", "Teacher"], horizontal=True)
             grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 11)])
+            class_level = int(grade.split()[-1])
             time_slot = st.selectbox("Available Time Slot", TIME_SLOTS)
 
             strong, weak, teaches = [], [], []
@@ -72,16 +53,17 @@ def dashboard_page():
             submitted = st.form_submit_button("Save Profile")
 
         if submitted:
-            cursor.execute("DELETE FROM profiles WHERE user_id = ?", (st.session_state.user_id,))
             cursor.execute("""
-                INSERT INTO profiles
-                (user_id, role, grade, class, time, strong_subjects, weak_subjects, teaches)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO profiles (
+                    user_id, role, grade, class_level, time,
+                    strong_subjects, weak_subjects, teaches, status
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'waiting')
             """, (
                 st.session_state.user_id,
                 role,
                 grade,
-                int(grade.split()[-1]),
+                class_level,
                 time_slot,
                 ",".join(strong),
                 ",".join(weak),
@@ -95,9 +77,6 @@ def dashboard_page():
 
         return
 
-    # -------------------------------------------------
-    # PROFILE VIEW
-    # -------------------------------------------------
     role, grade, time_slot, strong, weak, teaches = profile
 
     strong_list = strong.split(",") if strong else []
@@ -106,7 +85,6 @@ def dashboard_page():
 
     st.subheader("Profile Overview")
 
-    # Profile summary
     p1, p2, p3 = st.columns(3)
     p1.metric("Role", role)
     p2.metric("Grade", grade)
@@ -114,26 +92,17 @@ def dashboard_page():
 
     st.divider()
 
-    # -------------------------------------------------
-    # SUBJECTS
-    # -------------------------------------------------
     s1, s2 = st.columns(2)
 
     with s1:
         st.markdown("### Strong Subjects")
-        if strong_list or teach_list:
-            for subject in (strong_list or teach_list):
-                st.success(subject)
-        else:
-            st.info("No strong subjects added")
+        for subject in (strong_list or teach_list):
+            st.success(subject) if subject else None
 
     with s2:
         st.markdown("### Weak Subjects")
-        if weak_list:
-            for subject in weak_list:
-                st.error(subject)
-        else:
-            st.info("No weak subjects added")
+        for subject in weak_list:
+            st.error(subject) if subject else None
 
     st.divider()
 
@@ -141,9 +110,6 @@ def dashboard_page():
         st.session_state.edit_profile = True
         st.rerun()
 
-    # -------------------------------------------------
-    # SESSION DATA
-    # -------------------------------------------------
     cursor.execute("""
         SELECT mentor, rating, session_date
         FROM ratings
@@ -157,9 +123,6 @@ def dashboard_page():
     total_sessions = len(rows)
     avg_rating = round(sum(r[1] for r in rows) / total_sessions, 2) if total_sessions else "—"
 
-    # -------------------------------------------------
-    # STATS
-    # -------------------------------------------------
     st.subheader("Progress")
 
     c1, c2, c3, c4 = st.columns(4)
