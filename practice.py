@@ -4,9 +4,10 @@ from streak import update_streak
 
 def practice_page():
 
-    if "user_profile" not in st.session_state:
-        st.warning("Please log in to access practice.")
-        return
+    if not st.session_state.get("user_id"):
+    st.warning("Please log in to access practice.")
+    return
+
 
     profile = st.session_state.user_profile
 
