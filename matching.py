@@ -2,6 +2,8 @@ import streamlit as st
 import time
 from datetime import datetime, timedelta
 from database import cursor, conn
+from streamlit_autorefresh import st_autorefresh
+
 
 MATCH_THRESHOLD = 30
 SESSION_TIMEOUT_MIN = 60
@@ -170,44 +172,52 @@ def matchmaking_page():
         "weak": (weak or "").split(",")
     }
 
-    # =====================================================
-    # LIVE CHAT MODE (AUTO-ENTER IF MATCHED)
-    # =====================================================
-    if match_id:
-        cursor.execute("""
-            SELECT a.name
-            FROM profiles p
-            JOIN auth_users a ON a.id = p.user_id
-            WHERE p.match_id=? AND p.user_id!=?
-        """, (match_id, current_user["user_id"]))
-        partner = cursor.fetchone()
+# =====================================================
+# LIVE CHAT MODE
+# =====================================================
+if match_id:
 
-        st.subheader("Live Learning Room")
-        st.info(f"Paired with **{partner[0]}**")
+    # 🔁 AUTO REFRESH every 2 seconds
+    st_autorefresh(interval=2000, key="chat_refresh")
 
-        chat_box = st.container(height=400)
-        with chat_box:
-            for sender, msg in load_messages(match_id):
-                if sender == current_user["name"]:
-                    st.markdown(f"**You:** {msg}")
-                else:
-                    st.markdown(f"**{sender}:** {msg}")
+    cursor.execute("""
+        SELECT a.name
+        FROM profiles p
+        JOIN auth_users a ON a.id = p.user_id
+        WHERE p.match_id=? AND p.user_id!=?
+    """, (match_id, current_user["user_id"]))
+    partner = cursor.fetchone()
 
-        msg = st.text_input("Message")
-        if st.button("Send") and msg:
+    st.subheader("Live Learning Room")
+    st.info(f"Paired with **{partner[0]}**")
+
+    chat_box = st.container(height=400)
+    with chat_box:
+        for sender, msg in load_messages(match_id):
+            if sender == current_user["name"]:
+                st.markdown(f"**You:** {msg}")
+            else:
+                st.markdown(f"**{sender}:** {msg}")
+
+    msg = st.text_input("Message", key="chat_input")
+
+    if st.button("Send"):
+        if msg.strip():
             send_message(match_id, current_user["name"], msg)
+            st.session_state.chat_input = ""  # clear box
             st.rerun()
 
-        if st.button("End Session"):
-            cursor.execute("""
-                UPDATE profiles
-                SET status='waiting', match_id=NULL
-                WHERE match_id=?
-            """, (match_id,))
-            conn.commit()
-            st.rerun()
+    if st.button("End Session"):
+        cursor.execute("""
+            UPDATE profiles
+            SET status='waiting', match_id=NULL
+            WHERE match_id=?
+        """, (match_id,))
+        conn.commit()
+        st.rerun()
 
-        return
+    return
+
 
     # =====================================================
     # FIND MATCH
@@ -235,3 +245,4 @@ def matchmaking_page():
             st.rerun()
         else:
             st.warning("No suitable match right now. Try again later.")
+
