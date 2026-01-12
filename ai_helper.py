@@ -1,26 +1,17 @@
 import streamlit as st
 from openai import OpenAI
 
-# Explicitly load key from Streamlit secrets
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 def ask_ai(question: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a helpful AI tutor who explains concepts simply to students."
-            },
-            {
-                "role": "user",
-                "content": question
-            }
-        ],
-        temperature=0.4,
-        max_tokens=300
-    )
+    try:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-    return response.choices[0].message.content.strip()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": question}],
+            max_tokens=50
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"AI ERROR → {type(e).__name__}: {e}"
