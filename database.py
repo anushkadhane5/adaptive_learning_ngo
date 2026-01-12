@@ -18,14 +18,14 @@ def init_db():
     """)
 
     # -------------------------
-    # PROFILES
+    # PROFILES (FIXED)
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS profiles (
         user_id INTEGER UNIQUE,
         role TEXT,
         grade TEXT,
-        class INTEGER,
+        class_level INTEGER,
         time TEXT,
         strong_subjects TEXT,
         weak_subjects TEXT,
@@ -50,7 +50,7 @@ def init_db():
     """)
 
     # -------------------------
-    # SESSION FILE SHARING (NEW)
+    # SESSION FILE SHARING
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS session_files (
