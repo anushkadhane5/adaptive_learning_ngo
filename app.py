@@ -201,7 +201,7 @@ if st.session_state.stage == 1:
                 name = st.text_input("My Full Name", placeholder="e.g. Rahul Sharma")
                 languages = st.multiselect("Languages I speak", ["English", "Hindi", "Marathi", "Tamil", "Bengali", "Telugu"])
             with col2:
-                grade = st.selectbox("Current Grade", [f"Grade {i}" for i in range(5, 13)])
+                grade = st.selectbox("Current Grade", [f"Grade {i}" for i in range(1, 13)])
                 time_slot = st.selectbox("Preferred Time", ["4-5 PM", "5-6 PM", "6-7 PM"])
             
             st.divider()
