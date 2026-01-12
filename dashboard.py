@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from datetime import date, timedelta
+from datetime import timedelta
 from database import cursor, conn
 
 SUBJECTS = ["Mathematics", "English", "Science"]
@@ -15,13 +15,11 @@ def calculate_streak(dates):
 
     dates = sorted(set(dates), reverse=True)
     streak = 1
-
     for i in range(len(dates) - 1):
         if dates[i] - dates[i + 1] == timedelta(days=1):
             streak += 1
         else:
             break
-
     return streak
 
 
@@ -31,13 +29,50 @@ def calculate_streak(dates):
 def dashboard_page():
 
     # -----------------------------------------------------
+    # CSS: SVG ICONS + ANIMATIONS
+    # -----------------------------------------------------
+    st.markdown("""
+    <style>
+    .fade-in {
+        animation: fadeIn 0.6s ease-in;
+    }
+    @keyframes fadeIn {
+        from {opacity:0; transform:translateY(6px);}
+        to {opacity:1; transform:translateY(0);}
+    }
+
+    .hover-card:hover {
+        transform: translateY(-4px);
+        transition: 0.2s ease;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.12);
+    }
+
+    .icon {
+        width:18px;
+        height:18px;
+        vertical-align:middle;
+        margin-right:6px;
+        background-color: currentColor;
+        mask-size: contain;
+        mask-repeat: no-repeat;
+        mask-position: center;
+        -webkit-mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+    }
+
+    .icon-user { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='8' r='4'/><path d='M4 20c0-4 4-6 8-6s8 2 8 6'/></svg>"); }
+    .icon-star { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l3 7h7l-5.5 4.5L18 21l-6-3.5L6 21l1.5-7.5L2 9h7z'/></svg>"); }
+    .icon-alert { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l10 20H2L12 2z'/></svg>"); }
+    .icon-edit { mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 21l3-1 12-12-2-2L4 18l-1 3z'/></svg>"); }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # -----------------------------------------------------
     # HERO
     # -----------------------------------------------------
     st.markdown(f"""
-    <div class="card" style="
-        background: linear-gradient(135deg, #6366f1, #4f46e5);
-        color: white;
-    ">
+    <div class="card fade-in" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;">
         <h2>Welcome back, {st.session_state.user_name}</h2>
         <p>Track your learning, mentoring, and impact — all in one place.</p>
     </div>
@@ -54,20 +89,19 @@ def dashboard_page():
     profile = cursor.fetchone()
 
     # =====================================================
-    # PROFILE SETUP (IF NOT EXISTS)
+    # PROFILE SETUP / EDIT
     # =====================================================
-    if not profile:
+    edit_mode = st.session_state.get("edit_profile", False)
+
+    if not profile or edit_mode:
         st.markdown("""
-        <div class="card">
-            <h3>Complete Your Profile</h3>
-            <p>
-                Before we can match you with the right peers,
-                please tell us about your grade, subjects, and availability.
-            </p>
+        <div class="card fade-in">
+            <h3><span class="icon icon-edit"></span>Profile Setup</h3>
+            <p>Update your learning details anytime.</p>
         </div>
         """, unsafe_allow_html=True)
 
-        with st.form("profile_setup"):
+        with st.form("profile_form"):
             role = st.radio("Role", ["Student", "Teacher"], horizontal=True)
             grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 11)])
             time_slot = st.selectbox("Available Time Slot", TIME_SLOTS)
@@ -75,10 +109,10 @@ def dashboard_page():
             strong, weak, teaches = [], [], []
 
             if role == "Student":
-                weak = st.multiselect("Subjects you need help with", SUBJECTS)
-                strong = st.multiselect("Subjects you are good at", SUBJECTS)
+                strong = st.multiselect("Strong Subjects", SUBJECTS)
+                weak = st.multiselect("Weak Subjects", SUBJECTS)
             else:
-                teaches = st.multiselect("Subjects you can teach", SUBJECTS)
+                teaches = st.multiselect("Subjects You Teach", SUBJECTS)
 
             submitted = st.form_submit_button("Save Profile")
 
@@ -100,31 +134,38 @@ def dashboard_page():
             ))
             conn.commit()
 
+            st.session_state.edit_profile = False
             st.success("Profile saved successfully.")
             st.rerun()
 
-        return  # STOP dashboard until profile exists
+        return
 
     # =====================================================
-    # DASHBOARD CONTENT (PROFILE EXISTS)
+    # DASHBOARD VIEW
     # =====================================================
     role, grade, time_slot, strong, weak, teaches = profile
-    subjects = (teaches or strong or weak or "—").replace(",", ", ")
+    strong_list = strong.split(",") if strong else []
+    weak_list = weak.split(",") if weak else []
+    teach_list = teaches.split(",") if teaches else []
 
     # -----------------------------------------------------
     # PROFILE CARD
     # -----------------------------------------------------
     st.markdown(f"""
-    <div class="card">
-        <h3>Your Profile</h3>
-        <div style="display:flex; gap:2rem; flex-wrap:wrap;">
-            <div><strong>Role</strong><br>{role}</div>
-            <div><strong>Grade</strong><br>{grade}</div>
-            <div><strong>Time Slot</strong><br>{time_slot}</div>
-            <div><strong>Subjects</strong><br>{subjects}</div>
-        </div>
+    <div class="card hover-card fade-in">
+        <h3><span class="icon icon-user"></span>Your Profile</h3>
+        <p><strong>Role:</strong> {role}</p>
+        <p><strong>Grade:</strong> {grade}</p>
+        <p><strong>Time Slot:</strong> {time_slot}</p>
+
+        <p><span class="icon icon-star"></span><strong>Strong Subjects:</strong> {", ".join(strong_list or teach_list) or "—"}</p>
+        <p><span class="icon icon-alert"></span><strong>Weak Subjects:</strong> {", ".join(weak_list) or "—"}</p>
     </div>
     """, unsafe_allow_html=True)
+
+    if st.button("Edit Profile"):
+        st.session_state.edit_profile = True
+        st.rerun()
 
     # -----------------------------------------------------
     # SESSION DATA
@@ -143,44 +184,24 @@ def dashboard_page():
     avg_rating = round(sum(r[1] for r in rows) / total_sessions, 2) if total_sessions else "—"
 
     # -----------------------------------------------------
-    # LEADERBOARD
-    # -----------------------------------------------------
-    cursor.execute("""
-        SELECT mentor, COUNT(*) AS sessions, AVG(rating) AS avg_rating
-        FROM ratings
-        GROUP BY mentor
-        ORDER BY sessions DESC, avg_rating DESC
-    """)
-    leaderboard = cursor.fetchall()
-
-    leaderboard_rank = next(
-        (i + 1 for i, r in enumerate(leaderboard) if r[0] == st.session_state.user_name),
-        "—"
-    )
-
-    # -----------------------------------------------------
     # STATS
     # -----------------------------------------------------
     st.markdown("### Your Progress")
 
     c1, c2, c3, c4 = st.columns(4)
-
-    with st.spinner("Loading insights..."):
-        time.sleep(0.3)
+    time.sleep(0.2)
 
     c1.metric("Day Streak", streak)
-    c2.metric("Leaderboard Rank", f"#{leaderboard_rank}")
-    c3.metric("Sessions Completed", total_sessions)
-    c4.metric("Average Rating", avg_rating)
+    c2.metric("Sessions", total_sessions)
+    c3.metric("Avg Rating", avg_rating)
+    c4.metric("Consistency", f"{min(streak/30*100,100):.0f}%")
 
-    st.markdown("**Consistency Goal (30 days)**")
     st.progress(min(streak / 30, 1.0))
 
+    # -----------------------------------------------------
+    # HISTORY
+    # -----------------------------------------------------
     st.divider()
-
-    # -----------------------------------------------------
-    # SESSION HISTORY
-    # -----------------------------------------------------
     st.markdown("### Recent Sessions")
 
     if rows:
