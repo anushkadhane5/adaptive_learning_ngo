@@ -1,22 +1,26 @@
+import streamlit as st
 from openai import OpenAI
-import os
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Explicitly load key from Streamlit secrets
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
-def ask_ai(question):
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+def ask_ai(question: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful tutor who explains concepts simply to students."
+                "content": "You are a helpful AI tutor who explains concepts simply to students."
             },
             {
                 "role": "user",
                 "content": question
             }
         ],
-        max_tokens=250,
-        temperature=0.4
+        temperature=0.4,
+        max_tokens=300
     )
+
     return response.choices[0].message.content.strip()
