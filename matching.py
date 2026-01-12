@@ -3,9 +3,6 @@ import time
 from datetime import datetime, timedelta
 from database import cursor, conn
 
-# =========================================================
-# CONFIG
-# =========================================================
 MATCH_THRESHOLD = 30
 SESSION_TIMEOUT_MIN = 60
 
@@ -63,23 +60,18 @@ def calculate_match_score(user1, user2):
     score = 0
     reasons = []
 
-    # Student ↔ Student
     if user1["role"] == "Student" and user2["role"] == "Student":
         for s in user1["weak"]:
             if s and s in user2["strong"]:
                 score += 25
                 reasons.append(f"{user2['name']} strong in {s}")
-
         for s in user2["weak"]:
             if s and s in user1["strong"]:
                 score += 25
                 reasons.append(f"{user1['name']} strong in {s}")
-
-    # Teacher ↔ Student
     else:
         mentor = user1 if user1["role"] == "Teacher" else user2
         mentee = user2 if mentor == user1 else user1
-
         for s in mentee["weak"]:
             if s and s in mentor["strong"]:
                 score += 30
@@ -88,7 +80,6 @@ def calculate_match_score(user1, user2):
     if user1["grade"] == user2["grade"]:
         score += 10
         reasons.append("Same grade")
-
     if user1["time"] == user2["time"]:
         score += 10
         reasons.append("Same time slot")
@@ -100,29 +91,20 @@ def calculate_match_score(user1, user2):
 # =========================================================
 def find_best_match(current_user, all_users):
     cleanup_stale_profiles()
-
-    best = None
-    best_score = 0
-    best_reasons = []
+    best, best_score, best_reasons = None, 0, []
 
     for other in all_users:
         if other["user_id"] == current_user["user_id"]:
             continue
-
-        # Block Teacher–Teacher
         if current_user["role"] == "Teacher" and other["role"] == "Teacher":
             continue
 
         score, reasons = calculate_match_score(current_user, other)
-
         if score > best_score:
-            best = other
-            best_score = score
-            best_reasons = reasons
+            best, best_score, best_reasons = other, score, reasons
 
     if best_score >= MATCH_THRESHOLD:
         return best, best_score, best_reasons
-
     return None, 0, []
 
 # =========================================================
@@ -172,14 +154,10 @@ def matchmaking_page():
         "weak": (weak or "").split(",")
     }
 
-    # =====================================================
-    # LIVE CHAT MODE
-    # =====================================================
+    # ================= LIVE CHAT =================
     if match_id:
-
         st.subheader("Live Learning Room")
 
-        # Auto-refresh every 2 seconds
         if "last_refresh" not in st.session_state:
             st.session_state.last_refresh = time.time()
 
@@ -198,20 +176,14 @@ def matchmaking_page():
         if partner:
             st.info(f"Paired with **{partner[0]}**")
 
-        chat_box = st.container(height=400)
-        with chat_box:
-            for sender, msg in load_messages(match_id):
-                if sender == current_user["name"]:
-                    st.markdown(f"**You:** {msg}")
-                else:
-                    st.markdown(f"**{sender}:** {msg}")
+        for sender, msg in load_messages(match_id):
+            st.markdown(f"**{sender}:** {msg}")
 
         message = st.text_input("Message", key="chat_input")
 
         if st.button("Send"):
             if message.strip():
                 send_message(match_id, current_user["name"], message)
-                st.session_state.chat_input = ""
                 st.rerun()
 
         if st.button("End Session"):
@@ -222,32 +194,22 @@ def matchmaking_page():
             """, (match_id,))
             conn.commit()
             st.rerun()
-
         return
 
-    # =====================================================
-    # FIND MATCH
-    # =====================================================
+    # ================= FIND MATCH =================
     if st.button("Find Best Match", use_container_width=True):
-
         all_users = load_profiles()
         match, score, reasons = find_best_match(current_user, all_users)
 
         if match:
-            new_match_id = f"{current_user['user_id']}-{match['user_id']}"
-
+            match_id = f"{current_user['user_id']}-{match['user_id']}"
             cursor.execute("""
                 UPDATE profiles
                 SET status='matched', match_id=?
                 WHERE user_id IN (?, ?)
-            """, (new_match_id, current_user["user_id"], match["user_id"]))
+            """, (match_id, current_user["user_id"], match["user_id"]))
             conn.commit()
-
             st.success(f"Matched with {match['name']} (Score: {score})")
-            for r in reasons:
-                st.write("•", r)
-
-            time.sleep(1)
             st.rerun()
         else:
-            st.warning("No suitable match right now. Try again later.")
+            st.warning("No suitable match right now.")
