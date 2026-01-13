@@ -38,13 +38,12 @@ def init_db():
     # -------------------------
     # SAFE MIGRATIONS
     # -------------------------
-    def add_column_if_missing(column_sql):
+    def add_column_if_missing(sql):
         try:
-            cursor.execute(column_sql)
+            cursor.execute(sql)
         except sqlite3.OperationalError:
             pass
 
-    # old schema → new schema fix
     add_column_if_missing(
         "ALTER TABLE profiles ADD COLUMN class_level INTEGER"
     )
@@ -63,7 +62,7 @@ def init_db():
     """)
 
     # -------------------------
-    # SESSION FILE SHARING
+    # SESSION FILES
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS session_files (
@@ -77,7 +76,7 @@ def init_db():
     """)
 
     # -------------------------
-    # ⭐ OLD RATINGS (KEEP – DO NOT REMOVE)
+    # LEGACY RATINGS (KEEP)
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS ratings (
@@ -89,7 +88,7 @@ def init_db():
     """)
 
     # -------------------------
-    # ⭐ NEW SESSION RATINGS (MATCH-BASED)
+    # SESSION RATINGS (NEW)
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS session_ratings (
@@ -103,7 +102,7 @@ def init_db():
     """)
 
     # -------------------------
-    # USER STREAKS
+    # USER STREAKS (MOVED HERE ✅)
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_streaks (
