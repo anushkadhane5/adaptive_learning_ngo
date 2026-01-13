@@ -18,7 +18,7 @@ def init_db():
     """)
 
     # -------------------------
-    # PROFILES (BASE TABLE)
+    # PROFILES
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS profiles (
@@ -77,7 +77,7 @@ def init_db():
     """)
 
     # -------------------------
-    # RATINGS
+    # ⭐ OLD RATINGS (KEEP – DO NOT REMOVE)
     # -------------------------
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS ratings (
@@ -88,16 +88,29 @@ def init_db():
     )
     """)
 
+    # -------------------------
+    # ⭐ NEW SESSION RATINGS (MATCH-BASED)
+    # -------------------------
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS session_ratings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_id TEXT,
+        rater_id INTEGER,
+        rater_name TEXT,
+        rating INTEGER CHECK(rating BETWEEN 1 AND 5),
+        rated_at TEXT DEFAULT (datetime('now'))
+    )
+    """)
+
+    # -------------------------
+    # USER STREAKS
+    # -------------------------
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_streaks (
+        user_id INTEGER PRIMARY KEY,
+        streak INTEGER DEFAULT 0,
+        last_active DATE
+    )
+    """)
+
     conn.commit()
-
-# -------------------------
-# USER STREAKS (PERSISTENT)
-# -------------------------
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS user_streaks (
-    user_id INTEGER PRIMARY KEY,
-    streak INTEGER DEFAULT 0,
-    last_active DATE
-)
-""")
-
